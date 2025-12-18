@@ -1,0 +1,550 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?mso-application progid="Word.Document"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:body>
+    <!-- Title -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Title"/>
+      </w:pPr>
+      <w:r>
+        <w:t>HAMU WATER DASHBOARD GUIDE</w:t>
+      </w:r>
+    </w:p>
+    
+    <!-- Introduction -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Introduction</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This document provides a comprehensive guide to the Hamu Water dashboard system, designed to help business stakeholders understand the various dashboards, charts, and performance indicators available in the system. The dashboard is designed to provide real-time insights into sales, finances, inventory, and customer behavior to support data-driven decision making.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Main Dashboard -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Main Dashboard Overview</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>The main dashboard provides a high-level overview of the business performance across key metrics. It serves as the central hub for monitoring daily operations and identifying trends that require attention.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Key Metrics -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading2"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Key Metrics Cards</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Total Revenue -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="0077B6"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Total Revenue</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This card displays the total revenue generated from all sales transactions, including both bottle sales and water refills. The value is presented in KES (Kenya Shillings) and includes a percentage change indicator comparing the current period with the previous period. An upward green arrow indicates increased revenue, while a downward red arrow shows a decrease.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This is the primary indicator of overall business performance and growth. Monitoring this metric helps in assessing the effectiveness of sales strategies and promotional activities.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Total Sales -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="00B4D8"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Total Sales</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This metric shows the total number of sale transactions processed during the selected time period. It combines both the count of bottle sales and water refills. The card also displays a percentage change indicator comparing the current period with the previous one.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This metric helps track sales volume independently of revenue, giving insights into transaction frequency and customer traffic. A growing number of transactions generally indicates successful customer acquisition or increased purchase frequency.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Active Customers -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="48CAE4"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Active Customers</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This card shows the number of customers who have made at least one purchase during the selected time period. The percentage change indicator compares the current number of active customers with the previous period.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This metric is essential for monitoring customer engagement and retention. A healthy business should maintain or grow its active customer base. A declining number might indicate customer churn that requires immediate attention.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Low Stock Items -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="0096C7"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Low Stock Items</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This card displays the number of inventory items that are currently below their designated reorder threshold. The percentage change indicates how this number has changed compared to the previous period.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This metric provides an early warning system for potential stock-outs. A high or increasing number of low stock items may indicate supply chain issues that need addressing to prevent lost sales opportunities.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Dashboard Charts -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading2"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Dashboard Charts</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Revenue Trend -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:b/>
+        </w:rPr>
+        <w:t>Revenue Trend</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This line chart displays the daily revenue trend over the selected time period. The chart visualizes patterns in sales performance, helping identify peak sales days, seasonal trends, or unusual fluctuations.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: Trend analysis helps in forecasting future sales, identifying seasonality patterns, and evaluating the impact of marketing campaigns or external factors on revenue.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Revenue by Shop -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:b/>
+        </w:rPr>
+        <w:t>Revenue by Shop</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This bar chart compares the revenue generated by each shop location. Each bar represents a shop, with the height indicating the total revenue generated during the selected time period.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This visualization helps identify the best and worst performing shops, allowing for targeted interventions or reallocation of resources to optimize overall business performance.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Sales by Payment Mode -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:b/>
+        </w:rPr>
+        <w:t>Sales by Payment Mode</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This pie chart illustrates the distribution of sales across different payment methods: MPESA (mobile money), Cash, and Credit. Each segment is color-coded and shows the proportion of total sales made through each payment method.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: Understanding payment preferences helps optimize cash flow management and informs decisions about which payment options to promote or expand.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Top Customers -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:b/>
+        </w:rPr>
+        <w:t>Top Customers</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This table shows the top 5 customers by total spending. For each customer, it displays their name, phone number, total amount spent, and number of refills.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: Identifying and recognizing top customers is crucial for targeted retention strategies and loyalty programs. These customers represent a significant portion of revenue and their satisfaction should be prioritized.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Sales Analytics Dashboard -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Sales Analytics Dashboard</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>The Sales Analytics dashboard provides detailed insights into sales performance, allowing business stakeholders to analyze sales patterns, product performance, and payment trends.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Sales Key Metrics -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading2"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Sales Key Metrics</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Total Revenue -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="4661d1"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Total Revenue</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Similar to the main dashboard, this card shows the total revenue from all sales during the selected period with a percentage change indicator.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Refill Revenue -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="43a047"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Refill Revenue</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This card specifically shows revenue generated from water refill services. It includes a percentage change indicator comparing the current period with the previous one.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This metric helps track the performance of the refill service, which is often a recurring revenue stream and indicator of customer retention.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Bottle Sales Revenue -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="ff9800"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Bottle Sales Revenue</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This card displays revenue from the sale of water bottles. It includes a percentage change indicator for performance comparison.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: Bottle sales often represent new customer acquisition and are important for expanding the customer base who will potentially use refill services later.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Total Sales Count -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading3"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:color w:val="e53935"/>
+          <w:b/>
+        </w:rPr>
+        <w:t>Total Sales Count</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This card shows the total number of sales transactions and includes a percentage change indicator.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Business Significance: This metric helps in understanding sales volume trends independently of revenue, which can reveal changes in average transaction size or pricing effectiveness.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Financial Analytics Dashboard -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Financial Analytics Dashboard</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>The Financial Analytics dashboard provides insights into the business's financial health, including revenue, expenses, and profitability metrics.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Financial Key Metrics -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading2"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Financial Key Metrics</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This dashboard tracks expenses, profits, revenue trends, and cash flow metrics. It provides detailed breakdowns of financial data through various visualizations and tables.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Key components include expense categories, profit margins, revenue vs. expenses trends, and detailed expense logs. This dashboard is particularly valuable for financial planning and budgeting.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Inventory Analytics Dashboard -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Inventory Analytics Dashboard</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>The Inventory Analytics dashboard helps monitor stock levels, item movement, and consumption patterns to optimize inventory management.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Inventory Key Metrics -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading2"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Inventory Key Metrics</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This dashboard includes metrics on low stock items, inventory turnover, consumption trends, and stock movements. It helps prevent stockouts while minimizing excess inventory.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Visual components include status indicators for inventory levels, charts showing consumption patterns, and tables listing items requiring attention.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Customer Insights Dashboard -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Customer Insights Dashboard</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>The Customer Insights dashboard provides a comprehensive view of customer behavior, demographics, and purchasing patterns.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Customer Key Metrics -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading2"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Customer Key Metrics</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>This dashboard tracks total customers, active customers, new customer acquisition, and customer credits. It provides insights into customer loyalty and retention.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>Key metrics include customer growth trends, average time between refills, loyalty program participation, and credit utilization.</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Time Range Filter -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Using the Time Range Filter</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>All dashboards include a Time Range Filter that allows you to adjust the time period for the displayed data. Options typically include:</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="ListBullet"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Day: Shows data for the current day with hourly breakdown</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="ListBullet"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Week: Shows data for the last 7 days with daily breakdown</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="ListBullet"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Month: Shows data for the last 30 days with weekly breakdown</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="ListBullet"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Quarter: Shows data for the last 90 days with weekly breakdown</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="ListBullet"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Year: Shows data for the last 365 days with weekly breakdown</w:t>
+      </w:r>
+    </w:p>
+
+    <!-- Conclusion -->
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:t>Conclusion</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>The Hamu Water dashboard system provides comprehensive insights into all aspects of your water business operations. By regularly monitoring these dashboards and understanding the metrics and their significance, you can make informed decisions to improve efficiency, increase revenue, and enhance customer satisfaction.</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>For any questions or additional support regarding the dashboard, please contact the technical support team.</w:t>
+      </w:r>
+    </w:p>
+
+  </w:body>
+</w:document>

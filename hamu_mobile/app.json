@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "jsEngine": "hermes",
+    "name": "hamu_mobile",
+    "slug": "hamu_mobile",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "hamu",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.ambeyibrian.hamu_mobile",
+      "allowBackup": true,
+      "permissions": [],
+      "config": {
+        "usesCleartextTraffic": true
+      },
+      "statusBarStyle": "default",
+      "navigationBarColor": "#CAF0F8",
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6cb4e0cd-1754-4041-bff2-2d0c172015aa"
+      }
+    }
+  }
+}

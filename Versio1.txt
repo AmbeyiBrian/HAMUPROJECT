@@ -1,0 +1,156 @@
+Model: LogEntry
+  Field: id (AutoField)
+  Field: action_time (DateTimeField)
+  Field: user (ForeignKey)
+  Field: content_type (ForeignKey)
+  Field: object_id (TextField)
+  Field: object_repr (CharField)
+  Field: action_flag (PositiveSmallIntegerField)
+  Field: change_message (TextField)
+
+Model: Permission
+  Field: id (AutoField)
+  Field: name (CharField)
+  Field: content_type (ForeignKey)
+  Field: codename (CharField)
+
+Model: Group
+  Field: id (AutoField)
+  Field: name (CharField)
+
+Model: ContentType
+  Field: id (AutoField)
+  Field: app_label (CharField)
+  Field: model (CharField)
+
+Model: Session
+  Field: session_key (CharField)
+  Field: session_data (TextField)
+  Field: expire_date (DateTimeField)
+
+Model: Token
+  Field: key (CharField)
+  Field: user (OneToOneField)
+  Field: created (DateTimeField)
+
+Model: TokenProxy
+  Field: key (CharField)
+  Field: user (OneToOneField)
+  Field: created (DateTimeField)
+
+Model: Users
+  Field: id (BigAutoField)
+  Field: password (CharField)
+  Field: names (CharField)
+  Field: phone_number (CharField)
+  Field: user_class (CharField)
+  Field: shop (ForeignKey)
+  Field: pass_reset_code (IntegerField)
+  Field: date_joined (DateTimeField)
+  Field: last_login (DateTimeField)
+  Field: is_admin (BooleanField)
+  Field: is_active (BooleanField)
+  Field: is_superuser (BooleanField)
+  Field: is_staff (BooleanField)
+
+Model: Sales
+  Field: id (BigAutoField)
+  Field: customer (ForeignKey)
+  Field: shop (ForeignKey)
+  Field: paymentMode (CharField)
+  Field: package (CharField)
+  Field: waterAmount (FloatField)
+  Field: quantity (IntegerField)
+  Field: delivered (IntegerField)
+  Field: dateSold (DateTimeField)
+  Field: agent_name (CharField)
+  Field: cost (IntegerField)
+
+Model: Shops
+  Field: id (BigAutoField)
+  Field: shopName (CharField)
+  Field: freeRefillInterval (IntegerField)
+  Field: phone_number (CharField)
+
+Model: Refills
+  Field: id (BigAutoField)
+  Field: customer (ForeignKey)
+  Field: shop (ForeignKey)
+  Field: package (CharField)
+  Field: quantity (IntegerField)
+  Field: paymentMode (CharField)
+  Field: date (DateTimeField)
+  Field: agent_name (CharField)
+  Field: cost (IntegerField)
+  Field: number_of_free (IntegerField)
+  Field: delivered (IntegerField)
+
+Model: Customers
+  Field: shop (ForeignKey)
+  Field: names (CharField)
+  Field: phone_number (CharField)
+  Field: apartment_name (CharField)
+  Field: room_number (CharField)
+  Field: date (DateTimeField)
+
+Model: Packages
+  Field: id (BigAutoField)
+  Field: shop (ForeignKey)
+  Field: saleType (CharField)
+  Field: bottleType (CharField)
+  Field: waterAmount (CharField)
+  Field: description (CharField)
+  Field: price (IntegerField)
+  Field: dateUpdated (DateTimeField)
+
+Model: Credits
+  Field: id (BigAutoField)
+  Field: customer (ForeignKey)
+  Field: shop (ForeignKey)
+  Field: money_paid (IntegerField)
+  Field: payment_mode (CharField)
+  Field: date (DateTimeField)
+  Field: agent (CharField)
+
+Model: Expenses
+  Field: id (BigAutoField)
+  Field: shop (ForeignKey)
+  Field: description (CharField)
+  Field: cost (IntegerField)
+  Field: receipt (ImageField)
+  Field: agent_name (CharField)
+  Field: dateTime (DateTimeField)
+
+Model: MeterReading
+  Field: id (BigAutoField)
+  Field: shop (ForeignKey)
+  Field: agent_name (CharField)
+  Field: value (FloatField)
+  Field: meter_photo (ImageField)
+  Field: reading_type (CharField)
+  Field: date (DateField)
+  Field: time (TimeField)
+
+Model: SMS
+  Field: id (BigAutoField)
+  Field: target (CharField)
+  Field: date (DateTimeField)
+  Field: sender (CharField)
+  Field: message (CharField)
+
+Model: Stock
+  Field: id (BigAutoField)
+  Field: item (CharField)
+  Field: bottleType (CharField)
+  Field: shop (ForeignKey)
+  Field: quantity (IntegerField)
+  Field: director (CharField)
+  Field: date (DateTimeField)
+
+Model: StockItem
+  Field: id (BigAutoField)
+  Field: item (CharField)
+  Field: shop (ForeignKey)
+  Field: type (CharField)
+  Field: director (CharField)
+  Field: date (DateTimeField)
