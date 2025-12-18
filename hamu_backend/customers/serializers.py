@@ -10,17 +10,27 @@ class CustomerSerializer(serializers.ModelSerializer):
     refill_count = serializers.IntegerField(source='refills.count', read_only=True)
     packages = serializers.SerializerMethodField()
     loyalty = serializers.SerializerMethodField()
+    client_id = serializers.UUIDField(required=False, allow_null=True)
     
     class Meta:
         model = Customers
         fields = [
-            'id', 'shop', 'shop_details', 'names', 'phone_number', 
+            'id', 'client_id', 'shop', 'shop_details', 'names', 'phone_number', 
             'apartment_name', 'room_number', 'date_registered', 'refill_count',
             'packages', 'loyalty'
         ]
         extra_kwargs = {
             'shop': {'write_only': True}
         }
+    
+    def create(self, validated_data):
+        """Create customer with idempotency for offline sync."""
+        client_id = validated_data.get('client_id')
+        if client_id:
+            existing = Customers.objects.filter(client_id=client_id).first()
+            if existing:
+                return existing
+        return super().create(validated_data)
 
     def get_packages(self, obj):
         """

@@ -103,6 +103,15 @@ class StockLog(models.Model):
     Records changes (additions/removals) to the quantity of a specific StockItem.
     This replaces the old 'Stock' model.
     """
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
+
     stock_item = models.ForeignKey(StockItem, on_delete=models.PROTECT, related_name='stock_logs')
     # Positive for additions, negative for removals/usage
     quantity_change = models.IntegerField(help_text="Positive for additions, negative for removals/usage.")

@@ -6,6 +6,15 @@ class Customers(models.Model):
     Represents a customer registered with a specific shop.
     Uses default Django ID as PK, phone_number must be unique.
     """
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
+
     shop = models.ForeignKey(Shops, on_delete=models.CASCADE, related_name='customers')
     names = models.CharField(max_length=50)
     # Phone number is unique but not the primary key

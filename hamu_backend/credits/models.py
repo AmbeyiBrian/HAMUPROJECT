@@ -15,6 +15,15 @@ class Credits(models.Model):
         MPESA = 'MPESA', 'MPESA'
         CASH = 'CASH', 'CASH'
 
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
+
     # Customer FK now implicitly uses the Customer's 'id' PK
     customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name='credit_payments')
     # Removed default=1, shop should be explicitly provided

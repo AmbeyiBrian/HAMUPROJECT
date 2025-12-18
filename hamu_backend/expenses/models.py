@@ -1,5 +1,6 @@
 from django.db import models
 from decimal import Decimal # Import Decimal
+import uuid
 from shops.models import Shops
 # from django.contrib.auth import get_user_model # Use if linking agent to Users model later
 
@@ -9,6 +10,14 @@ class Expenses(models.Model):
     """
     Records operational expenses for a shop.
     """
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
     shop = models.ForeignKey(Shops, on_delete=models.CASCADE, related_name='expenses')
     description = models.CharField(max_length=100) # Increased length slightly
     # Use DecimalField for cost

@@ -1,9 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { offlineQueue } from './OfflineQueue';
+import { syncService } from './SyncService';
 
 // Base URL for the API
 // Standard local network IP typically starts with 192.168.x.x
 const API_BASE_URL = 'https://api.hamuwater.com/api'; // Fixed IP format and port separator
+
+// Endpoints that can be queued for offline sync (POST/PUT operations)
+const QUEUEABLE_ENDPOINTS = {
+  'sales/': 'sale',
+  'refills/': 'refill',
+  'expenses/': 'expense',
+  'meter-readings/': 'meter_reading',
+  'stock-logs/': 'stock_log',
+  'credits/': 'credit',
+  'customers/': 'customer',
+};
 
 /**
  * Add query parameters to a URL
@@ -16,9 +29,9 @@ const addQueryParams = (url, params = {}) => {
   const filteredParams = Object.fromEntries(
     Object.entries(params).filter(([_, value]) => value !== undefined && value !== null)
   );
-  
+
   if (Object.keys(filteredParams).length === 0) return url;
-  
+
   const queryString = new URLSearchParams(filteredParams).toString();
   return `${url}${url.includes('?') ? '&' : '?'}${queryString}`;
 };
@@ -29,6 +42,40 @@ class Api {
     // Initialize with empty state
     this._authToken = null;
     this._userCache = null;
+  }
+
+  /**
+   * Check if an error is a network or server error that should trigger queuing
+   */
+  isQueueableError(error) {
+    // Network errors (no response received)
+    if (!error.status && (
+      error.message === 'Network Error' ||
+      error.message?.includes('Network request failed') ||
+      error.message?.includes('fetch failed') ||
+      error.name === 'TypeError'
+    )) {
+      return true;
+    }
+
+    // Server errors (5xx)
+    if (error.status && error.status >= 500) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get the transaction type for an endpoint (if queueable)
+   */
+  getQueueableType(endpoint) {
+    for (const [path, type] of Object.entries(QUEUEABLE_ENDPOINTS)) {
+      if (endpoint.includes(path)) {
+        return type;
+      }
+    }
+    return null;
   }
   /**
    * Set the auth token for API requests
@@ -60,7 +107,7 @@ class Api {
    */  async fetch(endpoint, options = {}, queryParams = {}, isRetry = false) {
     // Get the auth token - prioritize memory cache for performance
     let token = this._authToken;
-    
+
     // If no token in memory, try to get it from storage
     if (!token) {
       token = await AsyncStorage.getItem('authToken');
@@ -73,18 +120,18 @@ class Api {
         console.warn(`No auth token available for request to ${endpoint}`);
       }
     }
-    
+
     // Set headers
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
-    
+
     // For FormData, remove Content-Type to let browser set it with boundary
     if (options.body instanceof FormData) {
       delete headers['Content-Type'];
     }
-    
+
     // Add auth token if available
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -93,17 +140,17 @@ class Api {
 
     // Add query parameters to the URL
     const url = addQueryParams(`${API_BASE_URL}/${endpoint}`, queryParams);
-    
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
       });
-      
+
       // Check if the response is JSON
       const contentType = response.headers.get('content-type');
       const isJson = contentType && contentType.includes('application/json');
-      
+
       // Handle 401 Unauthorized error - token might be expired
       if (response.status === 401 && !isRetry && !endpoint.includes('token/refresh')) {
         console.log('Token expired, attempting to refresh...');
@@ -114,13 +161,13 @@ class Api {
           this._authToken = refreshData.access;
           // Store the new token
           await AsyncStorage.setItem('authToken', refreshData.access);
-          
+
           // Dispatch a custom event for token refresh success 
           // (this will be useful for showing a subtle message)
           if (global.EventEmitter) {
             global.EventEmitter.emit('tokenRefreshSuccess');
           }
-          
+
           // Retry the original request with the new token
           return this.fetch(endpoint, options, queryParams, true);
         } catch (refreshError) {
@@ -129,10 +176,10 @@ class Api {
           await AsyncStorage.removeItem('authToken');
           await AsyncStorage.removeItem('refreshToken');
           this._authToken = null;
-          
+
           // Log the session expiry
           console.warn('Session expired - tokens cleared.');
-          
+
           // Only emit session expired for critical auth-required endpoints
           // Don't interfere with normal navigation
           if (endpoint.includes('users/me') || endpoint.includes('dashboard') || endpoint.includes('shops/assigned')) {
@@ -141,7 +188,7 @@ class Api {
               global.EventEmitter.emit('sessionExpired', 'Your session has expired. Please log in again.');
             }
           }
-          
+
           // Always return a consistent auth error for any 401 after failed refresh
           const data = isJson ? await response.json() : await response.text();
           throw {
@@ -153,14 +200,14 @@ class Api {
           };
         }
       }
-      
+
       // Parse the response
       const data = isJson ? await response.json() : await response.text();
-      
+
       // Handle error responses
       if (!response.ok) {
         console.error('API error:', response.status, data);
-        
+
         // For 401 errors, provide appropriate error structure
         if (response.status === 401) {
           throw {
@@ -170,7 +217,7 @@ class Api {
             sessionExpired: true,
           };
         }
-        
+
         // For other errors, use standard error structure
         throw {
           status: response.status,
@@ -178,14 +225,48 @@ class Api {
           message: data.detail || 'Something went wrong',
         };
       }
-      
+
+      // Trigger sync after successful response (backend is available)
+      syncService.triggerSync();
+
       return data;
     } catch (error) {
       console.error('API request failed:', error);
+
+      // Check if this is a queueable error and request
+      const method = options.method?.toUpperCase() || 'GET';
+      const queueableType = this.getQueueableType(endpoint);
+
+      if (queueableType && (method === 'POST' || method === 'PUT') && this.isQueueableError(error)) {
+        // Queue the transaction for later sync
+        try {
+          const requestBody = options.body ? JSON.parse(options.body) : {};
+          const queuedItem = await offlineQueue.addToQueue(
+            queueableType,
+            endpoint,
+            requestBody,
+            method
+          );
+
+          console.log(`[API] Queued ${queueableType} for offline sync:`, queuedItem.id);
+
+          // Return a special response indicating the item was queued
+          return {
+            queued: true,
+            client_id: queuedItem.id,
+            message: 'Saved locally. Will sync when connection is restored.',
+            _offlineQueued: true,
+          };
+        } catch (queueError) {
+          console.error('[API] Failed to queue transaction:', queueError);
+          // Fall through to throw the original error
+        }
+      }
+
       throw error;
     }
   }
-  
+
   // Authentication methods
     /**
    * Login with phone number and password
@@ -195,35 +276,35 @@ class Api {
    */  async login(phone_number, password) {
     // Clear any previous state before login attempt
     this.clearState();
-    
+
     const data = await this.fetch('token/', {
       method: 'POST',
       body: JSON.stringify({ phone_number, password }),
     });
-    
+
     // Set tokens in memory and storage
     this._authToken = data.access;
-    
+
     console.log('Got access token, setting in memory and storage');
-    
+
     // Store the auth tokens - must await these operations
     await AsyncStorage.setItem('authToken', data.access);
     await AsyncStorage.setItem('refreshToken', data.refresh);
-    
+
     // Add small delay to ensure token is properly stored
     await new Promise(resolve => setTimeout(resolve, 300));
-    
+
     console.log('Token stored, now fetching user profile');
-    
+
     // Fetch user profile after token is properly stored
     const user = await this.getCurrentUser();
-    
+
     return {
       tokens: data,
       user,
     };
   }
-  
+
   /**
    * Logout the current user
    */
@@ -232,7 +313,7 @@ class Api {
     await AsyncStorage.removeItem('refreshToken');
     this.clearState();
   }
-  
+
   /**
    * Change user's password
    * @param {string} oldPassword - Current password
@@ -248,7 +329,7 @@ class Api {
       }),
     });
   }
-  
+
   /**
    * Get the current user's profile
    * @returns {Promise<Object>} - User profile data
@@ -260,18 +341,18 @@ class Api {
     this._userCache = userData;
     return userData;
   }
-  
+
   /**
    * Refresh the auth token
    * @returns {Promise<Object>} - New auth tokens
    */
   async refreshToken() {
     const refreshToken = await AsyncStorage.getItem('refreshToken');
-    
+
     if (!refreshToken) {
       throw new Error('No refresh token available');
     }
-    
+
     // Make a direct fetch call without using this.fetch to avoid infinite loops
     const url = `${API_BASE_URL}/token/refresh/`;
     const response = await fetch(url, {
@@ -281,17 +362,17 @@ class Api {
       },
       body: JSON.stringify({ refresh: refreshToken }),
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Refresh token expired' }));
       throw new Error(errorData.detail || 'Failed to refresh token');
     }
-    
+
     const data = await response.json();
-    
+
     // Store the new auth token
     await AsyncStorage.setItem('authToken', data.access);
-    
+
     return data;
   }
 
@@ -308,7 +389,7 @@ class Api {
       })
     });
   }
-  
+
   /**
    * Verify a password reset code
    * @param {string} phoneNumber - Phone number associated with the account
@@ -324,7 +405,7 @@ class Api {
       })
     });
   }
-  
+
   /**
    * Reset password with valid code
    * @param {string} phoneNumber - Phone number associated with the account
@@ -344,7 +425,7 @@ class Api {
   }
 
   // Shop methods
-  
+
   /**
    * Get all shops with pagination support
    * @param {number} page - Page number (1-based)
@@ -363,7 +444,7 @@ class Api {
   async getShop(id) {
     return this.fetch(`shops/${id}/`);
   }
-  
+
   /**
    * Get the user's assigned shop
    * @returns {Promise<Object>} - Shop data
@@ -371,9 +452,9 @@ class Api {
   async getUserShop() {
     return this.fetch('shops/assigned/');
   }
-  
+
   // Stock methods
-  
+
   /**
    * Get stock items with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -386,7 +467,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Get stock items that are low in inventory
    * @param {number} page - Page number (1-based)
@@ -399,7 +480,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Create a stock log entry
    * @param {Object} data - Stock log data
@@ -424,9 +505,9 @@ class Api {
       ...filters
     });
   }
-  
+
   // Customer methods
-  
+
   /**
    * Get customers with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -439,7 +520,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Get a customer by ID
    * @param {number} id - Customer ID
@@ -448,7 +529,7 @@ class Api {
   async getCustomer(id) {
     return this.fetch(`customers/${id}/`);
   }
-  
+
   /**
    * Create a new customer
    * @param {Object} data - Customer data
@@ -460,7 +541,7 @@ class Api {
       body: JSON.stringify(data),
     });
   }
-  
+
   /**
    * Update a customer
    * @param {number} id - Customer ID
@@ -473,9 +554,9 @@ class Api {
       body: JSON.stringify(data),
     });
   }
-  
+
   // Sales methods
-  
+
   /**
    * Get sales with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -488,7 +569,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Get a sale by ID
    * @param {number} id - Sale ID
@@ -497,7 +578,7 @@ class Api {
   async getSale(id) {
     return this.fetch(`sales/${id}/`);
   }
-  
+
   /**
    * Create a new sale
    * @param {Object} data - Sale data
@@ -509,9 +590,9 @@ class Api {
       body: JSON.stringify(data),
     });
   }
-  
+
   // Refill methods
-  
+
   /**
    * Get refills with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -524,7 +605,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Get a refill by ID
    * @param {number} id - Refill ID
@@ -533,7 +614,7 @@ class Api {
   async getRefill(id) {
     return this.fetch(`refills/${id}/`);
   }
-  
+
   /**
    * Create a new refill
    * @param {Object} data - Refill data
@@ -547,7 +628,7 @@ class Api {
   }
 
   // Package methods
-  
+
   /**
    * Get packages with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -560,7 +641,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Get a package by ID
    * @param {number} id - Package ID
@@ -571,7 +652,7 @@ class Api {
   }
 
   // Meter reading methods
-  
+
   /**
    * Get meter readings with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -584,7 +665,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Create a new meter reading
    * @param {FormData|Object} data - Meter reading data as FormData or plain object
@@ -611,7 +692,7 @@ class Api {
   }
 
   // Expense methods
-  
+
   /**
    * Get expenses with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -624,7 +705,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Create a new expense
    * @param {FormData|Object} data - Expense data as FormData or plain object
@@ -651,7 +732,7 @@ class Api {
   }
 
   // Credits methods
-  
+
   /**
    * Get credits with pagination and filtering support
    * @param {number} page - Page number (1-based)
@@ -664,7 +745,7 @@ class Api {
       ...filters
     });
   }
-  
+
   /**
    * Create a new credit
    * @param {Object} data - Credit data
@@ -678,7 +759,7 @@ class Api {
   }
 
   // Dashboard methods
-  
+
   /**
    * Get dashboard statistics
    * @param {Object} filters - Filters including shop_id, date_range
@@ -687,7 +768,7 @@ class Api {
   async getDashboardStats(filters = {}) {
     return this.fetch('dashboard/stats/', {}, filters);
   }
-  
+
   /**
    * Get sales statistics over time
    * @param {Object} filters - Filters including shop_id, date_range, interval
@@ -698,7 +779,7 @@ class Api {
   }
 
   // SMS methods
-  
+
   /**
    * Get SMS history with pagination support
    * @param {number} page - Page number (1-based)
@@ -788,7 +869,7 @@ class Api {
       .split(',')
       .map(number => number.trim())
       .filter(number => number.length > 0);
-    
+
     // Use the existing custom SMS method
     return this.sendCustomSMS(recipients, message);
   }
@@ -804,7 +885,7 @@ class Api {
     const recipients = customers
       .map(customer => customer.phone_number)
       .filter(phone => phone && phone.trim().length > 0);
-    
+
     // Use the existing custom SMS method
     return this.sendCustomSMS(recipients, message);
   }

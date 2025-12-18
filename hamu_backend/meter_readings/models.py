@@ -1,4 +1,5 @@
 from django.db import models
+import uuid
 from shops.models import Shops
 # from django.contrib.auth import get_user_model # Use if linking agent to Users model later
 
@@ -14,6 +15,15 @@ class MeterReading(models.Model):
         BLUE_SINGLE = 'Blue Machine', 'Blue Machine' # If only one blue machine exists
         PURIFIER = 'Purifier Machine', 'Purifier Machine'
         # Add more types as needed
+
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
 
     shop = models.ForeignKey(Shops, on_delete=models.CASCADE, related_name='meter_readings')
     agent_name = models.CharField(max_length=30) # Kept as CharField for now

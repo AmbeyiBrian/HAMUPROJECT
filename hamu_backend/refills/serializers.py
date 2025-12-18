@@ -14,11 +14,12 @@ class RefillSerializer(serializers.ModelSerializer):
     shop_details = ShopSerializer(source='shop', read_only=True)
     is_next_refill_free = serializers.SerializerMethodField()
     free_refills_available = serializers.SerializerMethodField()
+    client_id = serializers.UUIDField(required=False, allow_null=True)
     
     class Meta:
         model = Refills
         fields = [
-            'id', 'customer', 'customer_details', 'shop', 'shop_details',
+            'id', 'client_id', 'customer', 'customer_details', 'shop', 'shop_details',
             'package', 'package_details', 'quantity', 'payment_mode', 
             'cost', 'is_free', 'is_partially_free', 'free_quantity', 
             'paid_quantity', 'loyalty_refill_count', 'delivered', 
@@ -114,7 +115,15 @@ class RefillSerializer(serializers.ModelSerializer):
         """
         Create a new refill record with data from the frontend.
         Also deducts caps and labels from inventory based on refill package.
+        If client_id exists, return existing record (idempotency for offline sync).
         """
+        # Check for existing record with same client_id (offline sync idempotency)
+        client_id = validated_data.get('client_id')
+        if client_id:
+            existing = Refills.objects.filter(client_id=client_id).first()
+            if existing:
+                return existing  # Return existing, don't create duplicate
+        
         customer = validated_data.get('customer')
         shop = validated_data.get('shop')
         agent_name = validated_data.get('agent_name', 'System')

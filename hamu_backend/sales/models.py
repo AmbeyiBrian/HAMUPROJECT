@@ -1,5 +1,6 @@
 from django.db import models
 from decimal import Decimal # Import Decimal
+import uuid
 from customers.models import Customers
 from packages.models import Packages # Import Packages
 from shops.models import Shops
@@ -17,6 +18,15 @@ class Sales(models.Model):
         CREDIT = 'CREDIT', 'Credit'
         # FREE unlikely for new sales, but possible promotion
         # FREE = 'FREE', 'Free'
+
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
 
     # Customer FK now implicitly uses the Customer's 'id' PK
     customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name='sales', null=True, blank=True) # Allow anonymous sales?

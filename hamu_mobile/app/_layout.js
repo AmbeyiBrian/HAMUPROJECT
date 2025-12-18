@@ -8,6 +8,10 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Re-import the original AuthProvider for components using the original useAuth hook
 import { AuthProvider } from '../services/AuthContext';
+// Import offline services
+import { syncService } from '../services/SyncService';
+import { cacheService } from '../services/CacheService';
+import OfflineBanner from '../components/OfflineBanner';
 
 // Enhanced ocean blue theme
 const oceanBlueTheme = {
@@ -55,13 +59,13 @@ function StableAuthProvider({ children }) {
     user: null,
     isAuthenticated: false
   });
-  
+
   // Use state only for loading indicators
   const [state, setState] = useState({
     loading: false,
     initialized: true
   });
-  
+
   // Create stable login/logout functions
   const authActions = useMemo(() => ({
     login: () => {
@@ -77,14 +81,14 @@ function StableAuthProvider({ children }) {
       setState(prev => ({ ...prev, timestamp: Date.now() }));
     }
   }), []);
-  
+
   // Create stable context value that doesn't change on every render
   const contextValue = useMemo(() => ({
     ...state,
     ...authStateRef.current,
     ...authActions
   }), [state, authActions]);
-  
+
   return (
     <StableAuthContext.Provider value={contextValue}>
       {children}
@@ -107,7 +111,7 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const isLoginScreen = pathname === '/login';
   const router = useRouter();
-  
+
   // Use ref to track redirects and prevent loops
   const redirectAttemptRef = useRef(0);
 
@@ -117,12 +121,12 @@ function RootLayoutNav() {
     if (redirectAttemptRef.current > 0) {
       return;
     }
-    
+
     // Only handle redirects when fully initialized
     if (!initialized || loading) {
       return;
     }
-    
+
     // Simple redirect logic - only attempt once per mount
     if (isAuthenticated && isLoginScreen) {
       redirectAttemptRef.current += 1;
@@ -132,7 +136,7 @@ function RootLayoutNav() {
       router.replace('/login');
     }
   }, [isAuthenticated, isLoginScreen, initialized, loading, pathname, router]);
-  
+
   // Show loading indicator while authentication is being checked
   if (loading || !initialized) {
     return (
@@ -142,17 +146,17 @@ function RootLayoutNav() {
       </View>
     );
   }
-  
+
   return (
     <View style={{ flex: 1, backgroundColor: oceanBlueTheme.colors.background }}>
       <StatusBar
         backgroundColor={oceanBlueTheme.colors.statusBar}
         barStyle="light-content"
       />
-      
+
       {/* Minimalist header - only showing logout button when authenticated */}
       {!isLoginScreen && isAuthenticated && (
-        <View style={{ 
+        <View style={{
           backgroundColor: oceanBlueTheme.colors.primary,
           flexDirection: 'row',
           justifyContent: 'flex-end',
@@ -169,7 +173,10 @@ function RootLayoutNav() {
           />
         </View>
       )}
-      
+
+      {/* Offline Sync Banner */}
+      {isAuthenticated && <OfflineBanner />}
+
       {/* Content area */}
       <View style={{ flex: 1 }}>
         <Slot />
@@ -192,6 +199,18 @@ export default function RootLayout() {
       });
     }
   }, [fontsLoaded, fontError]);
+
+  // Initialize offline services on app mount
+  useEffect(() => {
+    console.log('[RootLayout] Initializing offline services');
+    syncService.initialize();
+    cacheService.initialize();
+
+    // Cleanup on unmount
+    return () => {
+      syncService.cleanup();
+    };
+  }, []);
 
   // Loading view for fonts
   if (!fontsLoaded && !fontError) {

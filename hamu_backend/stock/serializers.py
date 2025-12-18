@@ -10,11 +10,12 @@ class StockLogSerializer(serializers.ModelSerializer):
     shop_details = ShopSerializer(source='shop', read_only=True)
     stock_item_name = serializers.CharField(source='stock_item.item_name', read_only=True)
     stock_item_type = serializers.CharField(source='stock_item.item_type', read_only=True)
+    client_id = serializers.UUIDField(required=False, allow_null=True)
     
     class Meta:
         model = StockLog
         fields = [
-            'id', 'stock_item', 'stock_item_name', 'stock_item_type',
+            'id', 'client_id', 'stock_item', 'stock_item_name', 'stock_item_type',
             'quantity_change', 'notes', 'shop', 'shop_details',
             'director_name', 'log_date'
         ]
@@ -25,6 +26,13 @@ class StockLogSerializer(serializers.ModelSerializer):
     
     @transaction.atomic
     def create(self, validated_data):
+        # Check for existing record with same client_id (offline sync idempotency)
+        client_id = validated_data.get('client_id')
+        if client_id:
+            existing = StockLog.objects.filter(client_id=client_id).first()
+            if existing:
+                return existing  # Return existing, don't create duplicate
+        
         # Create the stock log entry
         stock_log = StockLog.objects.create(**validated_data)
         

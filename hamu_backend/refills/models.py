@@ -1,5 +1,6 @@
 from django.db import models
 from decimal import Decimal # Import Decimal
+import uuid
 from customers.models import Customers
 from packages.models import Packages # Import Packages
 from shops.models import Shops
@@ -16,6 +17,15 @@ class Refills(models.Model):
         CASH = 'CASH', 'CASH'
         CREDIT = 'CREDIT', 'Credit'
         FREE = 'FREE', 'Free' # For loyalty refills
+
+    # Client-generated UUID for offline sync idempotency
+    client_id = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Client-generated UUID for offline sync idempotency"
+    )
 
     # Customer FK now implicitly uses the Customer's 'id' PK
     customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name='refills', null=True, blank=True) # Allow anonymous refills? If not, remove null/blank
