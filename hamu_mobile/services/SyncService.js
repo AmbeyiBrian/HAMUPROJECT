@@ -121,22 +121,12 @@ class SyncServiceClass {
      */
     async syncItem(item) {
         try {
-            let response;
-
-            // Make the API call based on the method
-            switch (item.method.toUpperCase()) {
-                case 'POST':
-                    response = await api.post(item.endpoint, item.data);
-                    break;
-                case 'PUT':
-                    response = await api.put(item.endpoint, item.data);
-                    break;
-                case 'PATCH':
-                    response = await api.patch(item.endpoint, item.data);
-                    break;
-                default:
-                    throw new Error(`Unsupported method: ${item.method}`);
-            }
+            // Use api.fetch with the appropriate method
+            // Note: api.fetch handles the body serialization internally
+            const response = await api.fetch(item.endpoint, {
+                method: item.method.toUpperCase(),
+                body: JSON.stringify(item.data),
+            });
 
             return { success: true, data: response };
         } catch (error) {
