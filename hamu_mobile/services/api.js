@@ -492,7 +492,17 @@ class Api {
       return data;
     } catch (error) {
       console.log('[API] getStockItems failed, trying cache');
-      const cachedItems = await cacheService.getCachedStockItems(filters.shop);
+      // Try shop-specific cache first, then fallback to global cache
+      let cachedItems = await cacheService.getCachedStockItems(filters.shop);
+      if (!cachedItems && filters.shop) {
+        // Fallback to global cache and filter locally
+        cachedItems = await cacheService.getCachedStockItems(null);
+        if (cachedItems) {
+          cachedItems = cachedItems.filter(item =>
+            item.shop === filters.shop || item.shop_details?.id === filters.shop
+          );
+        }
+      }
       if (cachedItems && page === 1) {
         console.log('[API] Using cached stock items:', cachedItems.length);
         return { results: cachedItems, fromCache: true };
@@ -625,7 +635,16 @@ class Api {
       return data;
     } catch (error) {
       console.log('[API] getSales failed, trying cache');
-      const cachedSales = await cacheService.getCachedSales(filters.shop);
+      // Try shop-specific cache first, then fallback to global cache
+      let cachedSales = await cacheService.getCachedSales(filters.shop);
+      if (!cachedSales && filters.shop) {
+        cachedSales = await cacheService.getCachedSales(null);
+        if (cachedSales) {
+          cachedSales = cachedSales.filter(sale =>
+            sale.shop === filters.shop || sale.shop_details?.id === filters.shop
+          );
+        }
+      }
       if (cachedSales && page === 1) {
         console.log('[API] Using cached sales:', cachedSales.length);
         return { results: cachedSales, fromCache: true };
@@ -676,7 +695,16 @@ class Api {
       return data;
     } catch (error) {
       console.log('[API] getRefills failed, trying cache');
-      const cachedRefills = await cacheService.getCachedRefills(filters.shop);
+      // Try shop-specific cache first, then fallback to global cache
+      let cachedRefills = await cacheService.getCachedRefills(filters.shop);
+      if (!cachedRefills && filters.shop) {
+        cachedRefills = await cacheService.getCachedRefills(null);
+        if (cachedRefills) {
+          cachedRefills = cachedRefills.filter(refill =>
+            refill.shop === filters.shop || refill.shop_details?.id === filters.shop
+          );
+        }
+      }
       if (cachedRefills && page === 1) {
         console.log('[API] Using cached refills:', cachedRefills.length);
         return { results: cachedRefills, fromCache: true };
