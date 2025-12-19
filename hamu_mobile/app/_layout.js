@@ -107,13 +107,32 @@ function useStableAuth() {
 
 // Navigation wrapper with improved UI handling and redirect prevention
 function RootLayoutNav() {
-  const { isAuthenticated, loading, initialized, login, logout } = useStableAuth();
+  const { isAuthenticated, loading, initialized, login, logout, user } = useStableAuth();
   const pathname = usePathname();
   const isLoginScreen = pathname === '/login';
   const router = useRouter();
 
   // Use ref to track redirects and prevent loops
   const redirectAttemptRef = useRef(0);
+  // Track if we've already preloaded data
+  const hasPreloadedRef = useRef(false);
+
+  // Preload all data for offline use when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && user && !hasPreloadedRef.current) {
+      hasPreloadedRef.current = true;
+      console.log('[RootLayoutNav] Starting data preload for offline use...');
+      api.preloadAllData(user).then(result => {
+        console.log('[RootLayoutNav] Preload complete:', result);
+      }).catch(error => {
+        console.warn('[RootLayoutNav] Preload failed (will use lazy loading):', error.message);
+      });
+    }
+    // Reset preload flag when user logs out
+    if (!isAuthenticated) {
+      hasPreloadedRef.current = false;
+    }
+  }, [isAuthenticated, user]);
 
   // Handle authentication redirects safely to avoid loops
   useEffect(() => {
