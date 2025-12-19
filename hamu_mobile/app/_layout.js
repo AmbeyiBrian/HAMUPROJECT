@@ -7,7 +7,7 @@ import { PaperProvider, MD3LightTheme as DefaultTheme } from 'react-native-paper
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Re-import the original AuthProvider for components using the original useAuth hook
-import { AuthProvider } from '../services/AuthContext';
+import { AuthProvider, useAuth } from '../services/AuthContext';
 // Import offline services
 import { syncService } from '../services/SyncService';
 import { cacheService } from '../services/CacheService';
@@ -108,6 +108,8 @@ function useStableAuth() {
 // Navigation wrapper with improved UI handling and redirect prevention
 function RootLayoutNav() {
   const { isAuthenticated, loading, initialized, login, logout, user } = useStableAuth();
+  // Get real user from AuthContext for preloading
+  const { user: authUser } = useAuth();
   const pathname = usePathname();
   const isLoginScreen = pathname === '/login';
   const router = useRouter();
@@ -119,10 +121,11 @@ function RootLayoutNav() {
 
   // Preload all data for offline use when user is authenticated
   useEffect(() => {
-    if (isAuthenticated && user && !hasPreloadedRef.current) {
+    // Use authUser (from real AuthContext) for preload
+    if (isAuthenticated && authUser && !hasPreloadedRef.current) {
       hasPreloadedRef.current = true;
-      console.log('[RootLayoutNav] Starting data preload for offline use...');
-      api.preloadAllData(user).then(result => {
+      console.log('[RootLayoutNav] Starting data preload for offline use...', authUser.names);
+      api.preloadAllData(authUser).then(result => {
         console.log('[RootLayoutNav] Preload complete:', result);
       }).catch(error => {
         console.warn('[RootLayoutNav] Preload failed (will use lazy loading):', error.message);
@@ -132,7 +135,7 @@ function RootLayoutNav() {
     if (!isAuthenticated) {
       hasPreloadedRef.current = false;
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, authUser]);
 
   // Handle authentication redirects safely to avoid loops
   useEffect(() => {
