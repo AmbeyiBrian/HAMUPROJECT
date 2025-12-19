@@ -116,7 +116,10 @@ class RefillSerializer(serializers.ModelSerializer):
         Create a new refill record with data from the frontend.
         Also deducts caps and labels from inventory based on refill package.
         If client_id exists, return existing record (idempotency for offline sync).
+        For offline transactions, recalculates loyalty to ensure customers get their free refills.
         """
+        from django.db.models import Sum
+        
         # Check for existing record with same client_id (offline sync idempotency)
         client_id = validated_data.get('client_id')
         if client_id:
@@ -126,9 +129,46 @@ class RefillSerializer(serializers.ModelSerializer):
         
         customer = validated_data.get('customer')
         shop = validated_data.get('shop')
+        package = validated_data.get('package')
         agent_name = validated_data.get('agent_name', 'System')
+        quantity = validated_data.get('quantity', 1)
         
-        # Create the refill record directly with frontend data
+        # If this is an offline transaction (has client_id), recalculate loyalty
+        # This ensures customers get their free refills even when created offline
+        if client_id and customer and package and shop:
+            free_refill_interval = shop.freeRefillInterval
+            
+            if free_refill_interval > 0:
+                # Get total refill quantity for this customer and package BEFORE this transaction
+                total_before = Refills.objects.filter(
+                    customer=customer,
+                    package=package
+                ).aggregate(total=Sum('quantity'))['total'] or 0
+                
+                total_after = total_before + quantity
+                
+                # Calculate thresholds crossed
+                thresholds_before = total_before // free_refill_interval
+                thresholds_after = total_after // free_refill_interval
+                
+                # Free quantity is the number of new thresholds crossed
+                free_quantity = min(thresholds_after - thresholds_before, quantity)
+                paid_quantity = quantity - free_quantity
+                
+                # Recalculate cost based on paid quantity only
+                cost = package.price * paid_quantity
+                
+                # Update validated_data with recalculated values
+                validated_data['free_quantity'] = free_quantity
+                validated_data['paid_quantity'] = paid_quantity
+                validated_data['loyalty_refill_count'] = paid_quantity  # Only paid count toward loyalty
+                validated_data['cost'] = cost
+                validated_data['is_free'] = free_quantity > 0 and paid_quantity == 0
+                validated_data['is_partially_free'] = free_quantity > 0 and paid_quantity > 0
+                
+                print(f"[Offline Sync] Recalculated loyalty - Free: {free_quantity}, Paid: {paid_quantity}, Cost: {cost}")
+        
+        # Create the refill record with (possibly recalculated) data
         refill = super().create(validated_data)
         
         # Process inventory deduction for caps and labels
