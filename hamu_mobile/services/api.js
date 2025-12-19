@@ -1095,8 +1095,49 @@ class Api {
   }
 
   /**
+   * Export ALL customers for offline caching
+   * Uses the dedicated export endpoint that returns all customers without pagination
+   * @returns {Promise<Object>} - All customers
+   */
+  async exportCustomersForOffline() {
+    try {
+      const data = await this.fetch('customers/export_for_offline/');
+      // Cache all customers
+      if (data.results) {
+        await cacheService.cacheCustomers(data.results, null);
+        console.log(`[API] Exported ${data.count} customers for offline`);
+      }
+      return data;
+    } catch (error) {
+      console.error('[API] Failed to export customers for offline:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Export ALL packages for offline caching
+   * Uses the dedicated export endpoint that returns all packages without pagination
+   * @returns {Promise<Object>} - All packages
+   */
+  async exportPackagesForOffline() {
+    try {
+      const data = await this.fetch('packages/export_for_offline/');
+      // Cache all packages
+      if (data.results) {
+        await cacheService.cachePackages(data.results);
+        console.log(`[API] Exported ${data.count} packages for offline`);
+      }
+      return data;
+    } catch (error) {
+      console.error('[API] Failed to export packages for offline:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Preload all essential data for offline use
    * Call this after login/app initialization to ensure data is cached
+   * Uses dedicated export endpoints for reference data (customers, packages)
    * @param {Object} user - Current user for shop filtering
    * @returns {Promise<Object>} - Status of preloading
    */
@@ -1107,8 +1148,10 @@ class Api {
 
     const preloadTasks = [
       { name: 'shops', fn: () => this.getShops() },
-      { name: 'packages', fn: () => this.getPackages(1, {}) },
-      { name: 'customers', fn: () => this.getCustomers(1, { shop: shopId }) },
+      // Use export endpoints for full data (customers & packages are essential for transactions)
+      { name: 'packages', fn: () => this.exportPackagesForOffline() },
+      { name: 'customers', fn: () => this.exportCustomersForOffline() },
+      // Use regular pagination for transaction history (only recent data needed)
       { name: 'sales', fn: () => this.getSales(1, { shop: shopId }) },
       { name: 'refills', fn: () => this.getRefills(1, { shop: shopId }) },
       { name: 'stockItems', fn: () => this.getStockItems(1, { shop: shopId }) },

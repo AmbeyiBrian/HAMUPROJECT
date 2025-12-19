@@ -37,6 +37,37 @@ class CustomerViewSet(viewsets.ModelViewSet):
             serializer.save(shop=user.shop)
         else:
             serializer.save()
+    
+    @action(detail=False, methods=['get'])
+    def export_for_offline(self, request):
+        """
+        Export all customers for offline caching.
+        Returns minimal fields without pagination for efficient mobile caching.
+        """
+        queryset = self.get_queryset()
+        
+        # Return minimal fields for offline use
+        customers = []
+        for customer in queryset.select_related('shop'):
+            customers.append({
+                'id': customer.id,
+                'names': customer.names,
+                'phone_number': customer.phone_number,
+                'apartment_name': customer.apartment_name,
+                'room_number': customer.room_number,
+                'shop': customer.shop_id,
+                'shop_details': {
+                    'id': customer.shop.id,
+                    'shopName': customer.shop.shopName,
+                    'freeRefillInterval': customer.shop.freeRefillInterval,
+                } if customer.shop else None
+            })
+        
+        return Response({
+            'results': customers,
+            'count': len(customers),
+            'export_type': 'offline_cache'
+        })
 
 
 class CustomerInsightViewSet(viewsets.ModelViewSet):
