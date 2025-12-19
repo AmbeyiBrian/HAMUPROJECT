@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '../services/AuthContext';
 // Import offline services
 import { syncService } from '../services/SyncService';
 import { cacheService } from '../services/CacheService';
+import api from '../services/api';
 import OfflineBanner from '../components/OfflineBanner';
 
 // Enhanced ocean blue theme
@@ -121,8 +122,8 @@ function RootLayoutNav() {
 
   // Preload all data for offline use when user is authenticated
   useEffect(() => {
-    // Use authUser (from real AuthContext) for preload
-    if (isAuthenticated && authUser && !hasPreloadedRef.current) {
+    // Trigger preload when authUser (from real AuthContext) is available
+    if (authUser && !hasPreloadedRef.current) {
       hasPreloadedRef.current = true;
       console.log('[RootLayoutNav] Starting data preload for offline use...', authUser.names);
       api.preloadAllData(authUser).then(result => {
@@ -132,10 +133,10 @@ function RootLayoutNav() {
       });
     }
     // Reset preload flag when user logs out
-    if (!isAuthenticated) {
+    if (!authUser) {
       hasPreloadedRef.current = false;
     }
-  }, [isAuthenticated, authUser]);
+  }, [authUser]);
 
   // Handle authentication redirects safely to avoid loops
   useEffect(() => {
