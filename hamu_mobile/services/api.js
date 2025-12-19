@@ -480,10 +480,25 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of stock items
    */
   async getStockItems(page = 1, filters = {}) {
-    return this.fetch('stock-items/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('stock-items/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of stock items
+      if (page === 1 && data.results) {
+        await cacheService.cacheStockItems(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getStockItems failed, trying cache');
+      const cachedItems = await cacheService.getCachedStockItems(filters.shop);
+      if (cachedItems && page === 1) {
+        console.log('[API] Using cached stock items:', cachedItems.length);
+        return { results: cachedItems, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -598,10 +613,25 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of sales
    */
   async getSales(page = 1, filters = {}) {
-    return this.fetch('sales/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('sales/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of sales
+      if (page === 1 && data.results) {
+        await cacheService.cacheSales(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getSales failed, trying cache');
+      const cachedSales = await cacheService.getCachedSales(filters.shop);
+      if (cachedSales && page === 1) {
+        console.log('[API] Using cached sales:', cachedSales.length);
+        return { results: cachedSales, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -634,10 +664,25 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of refills
    */
   async getRefills(page = 1, filters = {}) {
-    return this.fetch('refills/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('refills/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of refills
+      if (page === 1 && data.results) {
+        await cacheService.cacheRefills(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getRefills failed, trying cache');
+      const cachedRefills = await cacheService.getCachedRefills(filters.shop);
+      if (cachedRefills && page === 1) {
+        console.log('[API] Using cached refills:', cachedRefills.length);
+        return { results: cachedRefills, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -768,10 +813,25 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of expenses
    */
   async getExpenses(page = 1, filters = {}) {
-    return this.fetch('expenses/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('expenses/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of expenses
+      if (page === 1 && data.results) {
+        await cacheService.cacheExpenses(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getExpenses failed, trying cache');
+      const cachedExpenses = await cacheService.getCachedExpenses(filters.shop);
+      if (cachedExpenses && page === 1) {
+        console.log('[API] Using cached expenses:', cachedExpenses.length);
+        return { results: cachedExpenses, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -808,10 +868,25 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of credits
    */
   async getCredits(page = 1, filters = {}) {
-    return this.fetch('credits/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('credits/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of credits
+      if (page === 1 && data.results) {
+        await cacheService.cacheCredits(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getCredits failed, trying cache');
+      const cachedCredits = await cacheService.getCachedCredits(filters.shop);
+      if (cachedCredits && page === 1) {
+        console.log('[API] Using cached credits:', cachedCredits.length);
+        return { results: cachedCredits, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -834,7 +909,20 @@ class Api {
    * @returns {Promise<Object>} - Dashboard statistics
    */
   async getDashboardStats(filters = {}) {
-    return this.fetch('dashboard/stats/', {}, filters);
+    try {
+      const data = await this.fetch('dashboard/stats/', {}, filters);
+      // Cache dashboard stats
+      await cacheService.cacheDashboardStats(data);
+      return data;
+    } catch (error) {
+      console.log('[API] getDashboardStats failed, trying cache');
+      const cachedStats = await cacheService.getCachedDashboardStats();
+      if (cachedStats) {
+        console.log('[API] Using cached dashboard stats');
+        return { ...cachedStats, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -956,6 +1044,43 @@ class Api {
 
     // Use the existing custom SMS method
     return this.sendCustomSMS(recipients, message);
+  }
+
+  /**
+   * Preload all essential data for offline use
+   * Call this after login/app initialization to ensure data is cached
+   * @param {Object} user - Current user for shop filtering
+   * @returns {Promise<Object>} - Status of preloading
+   */
+  async preloadAllData(user = null) {
+    console.log('[API] Starting data preload for offline use...');
+    const results = { success: [], failed: [] };
+    const shopId = user?.shop_details?.id || user?.shop?.id;
+
+    const preloadTasks = [
+      { name: 'shops', fn: () => this.getShops() },
+      { name: 'packages', fn: () => this.getPackages(1, {}) },
+      { name: 'customers', fn: () => this.getCustomers(1, { shop: shopId }) },
+      { name: 'sales', fn: () => this.getSales(1, { shop: shopId }) },
+      { name: 'refills', fn: () => this.getRefills(1, { shop: shopId }) },
+      { name: 'stockItems', fn: () => this.getStockItems(1, { shop: shopId }) },
+      { name: 'expenses', fn: () => this.getExpenses(1, { shop: shopId }) },
+      { name: 'credits', fn: () => this.getCredits(1, { shop: shopId }) },
+    ];
+
+    for (const task of preloadTasks) {
+      try {
+        await task.fn();
+        results.success.push(task.name);
+        console.log(`[API] Preloaded: ${task.name}`);
+      } catch (error) {
+        results.failed.push(task.name);
+        console.warn(`[API] Failed to preload: ${task.name}`, error.message);
+      }
+    }
+
+    console.log(`[API] Preload complete. Success: ${results.success.length}, Failed: ${results.failed.length}`);
+    return results;
   }
 }
 
