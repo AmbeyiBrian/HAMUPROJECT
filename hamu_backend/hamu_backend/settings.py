@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-+=0@plt%71#_)8qd)adu7-y_ajc!jnair9rx&tx%^!apnkuvb&
 DEBUG = True
 
 # Fixed the ALLOWED_HOSTS format - each host should be a separate string
-ALLOWED_HOSTS = ['192.169.0.105', '192.169.0.105:8000','localhost:3000', 'localhost:000', 'localhost', '127.0.0.1', '10.5.4.88', '10.5.4.88:8000']
+ALLOWED_HOSTS = ['192.169.0.105', '192.169.0.105:8000','localhost:3000', 'localhost:000', 'localhost', '127.0.0.1', '10.5.4.36', '10.5.4.36:8000']
 
 # Add detailed logging configuration
 LOGGING = {
@@ -181,7 +181,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'hamu_db',
         'USER': 'postgres',
-        'PASSWORD': '1234',
+        'PASSWORD': 'HomeManager@2025',
         'HOST': 'localhost'
     },
     'old_db': {

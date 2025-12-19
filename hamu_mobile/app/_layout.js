@@ -1,5 +1,5 @@
 import { Slot, SplashScreen, usePathname, useRouter } from 'expo-router';
-import { ThemeProvider, NavigationContainer } from '@react-navigation/native';
+import { ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { useEffect, createContext, useContext, useRef, useState, useMemo } from 'react';
 import { Text, View, ActivityIndicator, Button, Platform } from 'react-native';
@@ -227,12 +227,10 @@ export default function RootLayout() {
       <AuthProvider>
         <StableAuthProvider>
           <PaperProvider theme={paperTheme}>
-            <NavigationContainer theme={oceanBlueTheme}>
-              <ThemeProvider value={oceanBlueTheme}>
-                <StatusBar style="light" backgroundColor="#0077B6" />
-                <RootLayoutNav />
-              </ThemeProvider>
-            </NavigationContainer>
+            <ThemeProvider value={oceanBlueTheme}>
+              <StatusBar style="light" backgroundColor="#0077B6" />
+              <RootLayoutNav />
+            </ThemeProvider>
           </PaperProvider>
         </StableAuthProvider>
       </AuthProvider>

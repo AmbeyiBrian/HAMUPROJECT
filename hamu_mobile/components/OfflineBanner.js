@@ -8,15 +8,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { offlineQueue } from '../services/OfflineQueue';
 import { syncService } from '../services/SyncService';
-import { colors } from '../constants/Colors';
 
 const OfflineBanner = () => {
     const [pendingCount, setPendingCount] = useState(0);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const slideAnim = React.useRef(new Animated.Value(-50)).current;
+    const router = useRouter();
 
     useEffect(() => {
         // Load initial count
@@ -73,6 +74,10 @@ const OfflineBanner = () => {
         }
     };
 
+    const handleViewQueue = () => {
+        router.push('/(tabs)/sync-queue');
+    };
+
     if (!isVisible && pendingCount === 0) {
         return null;
     }
@@ -84,7 +89,7 @@ const OfflineBanner = () => {
                 { transform: [{ translateY: slideAnim }] },
             ]}
         >
-            <View style={styles.content}>
+            <TouchableOpacity onPress={handleViewQueue} style={styles.content}>
                 <MaterialCommunityIcons
                     name={isSyncing ? 'cloud-sync' : 'cloud-upload-outline'}
                     size={20}
@@ -95,7 +100,7 @@ const OfflineBanner = () => {
                         ? 'Syncing...'
                         : `${pendingCount} transaction${pendingCount !== 1 ? 's' : ''} pending sync`}
                 </Text>
-            </View>
+            </TouchableOpacity>
             {!isSyncing && (
                 <TouchableOpacity onPress={handleSyncPress} style={styles.syncButton}>
                     <Text style={styles.syncButtonText}>Sync Now</Text>

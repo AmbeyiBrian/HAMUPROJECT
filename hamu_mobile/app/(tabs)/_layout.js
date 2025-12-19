@@ -12,11 +12,11 @@ export default function TabLayout() {
   const { user, isDirector } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
   // Log user role information for debugging
-  console.log('TabLayout - User info:', 
-              user ? `${user.names} (${user.user_class})` : 'No user', 
-              'Is Director:', isDirector ? 'Yes' : 'No');
+  console.log('TabLayout - User info:',
+    user ? `${user.names} (${user.user_class})` : 'No user',
+    'Is Director:', isDirector ? 'Yes' : 'No');
 
   // If no user is logged in, we shouldn't show the tabs at all
   if (!user) return null;
@@ -63,7 +63,7 @@ export default function TabLayout() {
         headerTopInsetEnabled: true,
         // Add profile icon to the right of all tab headers
         headerRight: () => (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={navigateToProfile}
             style={{ marginRight: 15 }}
           >
@@ -71,7 +71,7 @@ export default function TabLayout() {
           </TouchableOpacity>
         ),
       }}>
-      
+
       <Tabs.Screen
         name="index"
         options={{
@@ -93,7 +93,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="stock"
         options={{
@@ -115,7 +115,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="sales"
         options={{
@@ -181,7 +181,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="expenses"
         options={{
@@ -225,12 +225,21 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       {/* Profile screen is now hidden from the tab bar but still accessible from the header icon */}
       <Tabs.Screen
         name="profile"
         options={{
-          title:'Profile',
+          title: 'Profile',
+          href: null, // This hides it from the tab bar
+        }}
+      />
+
+      {/* Sync Queue screen - hidden from tab bar, accessible via OfflineBanner or profile */}
+      <Tabs.Screen
+        name="sync-queue"
+        options={{
+          title: 'Sync Queue',
           href: null, // This hides it from the tab bar
         }}
       />

@@ -5,7 +5,7 @@ import { syncService } from './SyncService';
 
 // Base URL for the API
 // Standard local network IP typically starts with 192.168.x.x
-const API_BASE_URL = 'https://api.hamuwater.com/api'; // Fixed IP format and port separator
+const API_BASE_URL = 'http://10.5.4.36:8000/api'; // Fixed IP format and port separator
 
 // Endpoints that can be queued for offline sync (POST/PUT operations)
 const QUEUEABLE_ENDPOINTS = {

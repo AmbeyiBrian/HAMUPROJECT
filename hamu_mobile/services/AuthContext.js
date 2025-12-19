@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useRouter } from 'expo-router';
 import api from './api';
 import eventEmitter from './EventEmitter';
+import { cacheService } from './CacheService';
 
 // Context to manage authentication state
 const AuthContext = createContext();
@@ -25,17 +26,18 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const router = useRouter();
-  
+
   // Listen for session expiration events
   useEffect(() => {
     const sessionExpiredListener = eventEmitter.on('sessionExpired', handleSessionExpired);
-    
+
     return () => {
       sessionExpiredListener(); // Clean up listener
     };
   }, []);
-  
+
   // Handle session expiration - navigate to login page
   const handleSessionExpired = (message) => {
     // Clear any stored tokens
@@ -47,7 +49,7 @@ export const AuthProvider = ({ children }) => {
       }
     }, 1500);
   };
-  
+
   // Helper to clear tokens
   const clearTokens = async () => {
     try {
@@ -56,12 +58,13 @@ export const AuthProvider = ({ children }) => {
       setAuthToken(null);
       setUser(null);
       setIsAuthenticated(false);
+      setIsOfflineMode(false);
       api.clearState();
     } catch (e) {
       console.error('Error clearing tokens:', e);
     }
   };
-  
+
   // Check for stored tokens on mount  
   useEffect(() => {
     const loadTokens = async () => {
@@ -74,11 +77,11 @@ export const AuthProvider = ({ children }) => {
           setAuthToken(token);
           // Set up API with the token
           api.setAuthToken(token);
-          
+
           // First try to get user info from token directly
           const tokenPayload = decodeToken(token);
           console.log('Token payload during app startup:', tokenPayload);
-          
+
           if (tokenPayload && tokenPayload.user_class) {
             // Create minimal user object from token claims
             const userFromToken = {
@@ -90,23 +93,33 @@ export const AuthProvider = ({ children }) => {
               phone_number: '',
               is_active: true
             };
-            
+
             // Set minimal user data from token
             setUser(userFromToken);
             setIsAuthenticated(true);
             console.log('Set initial user data from token', userFromToken);
           }
-          
+
           try {
             // Still fetch user profile for complete data
             const userData = await api.getCurrentUser();
             setUser(userData);
             setIsAuthenticated(true);
+            setIsOfflineMode(false);
+            // Cache the profile for offline use
+            await cacheService.cacheUserProfile(userData);
           } catch (profileError) {
             console.error('Failed to load user profile:', profileError);
-            // If we already have user data from token, don't clear tokens
-            if (!tokenPayload || !tokenPayload.user_class) {
-              // Only clear tokens if we couldn't get user info from token
+            // Try to use cached profile if API fails
+            const cachedProfile = await cacheService.getCachedUserProfile();
+            if (cachedProfile) {
+              console.log('[AuthContext] Using cached profile for offline mode');
+              setUser(cachedProfile);
+              setIsAuthenticated(true);
+              setIsOfflineMode(true);
+              eventEmitter.emit('toast:info', 'Using offline mode with cached data');
+            } else if (!tokenPayload || !tokenPayload.user_class) {
+              // Only clear tokens if we couldn't get user info from token or cache
               await clearTokens();
               // Inform the user with a friendly message
               eventEmitter.emit('toast:error', 'Your session has expired. Please log in again.');
@@ -126,42 +139,46 @@ export const AuthProvider = ({ children }) => {
         setInitialized(true);
       }
     };
-    
+
     loadTokens();
   }, []);
   // Login handler
   const login = async (username, password) => {
     try {
       setError(null);
-      
+
       // Reset state before login to clear any previously logged in user data
       setUser(null);
       setAuthToken(null);
-      
+
       const response = await api.login(username, password);
-      
+
       console.log('Login successful, setting up authentication state');
-      
+
       // Store tokens
       await AsyncStorage.setItem('authToken', response.tokens.access);
       if (response.tokens.refresh) {
         await AsyncStorage.setItem('refreshToken', response.tokens.refresh);
       }
-      
+
       // Update state
       setAuthToken(response.tokens.access);
       setUser(response.user);
       setIsAuthenticated(true);
-      
+      setIsOfflineMode(false);
+
+      // Cache user profile for offline use
+      await cacheService.cacheUserProfile(response.user);
+
       // Set up API with the new token
       await api.setAuthToken(response.tokens.access);
-      
+
       // Add a delay to ensure everything is set properly
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       // Show welcome message
       eventEmitter.emit('toast:success', `Welcome, ${response.user.names}`);
-      
+
       return response;
     } catch (e) {
       setError(e.message || 'Failed to login');
@@ -180,7 +197,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Always clear local state regardless of server response
       await clearTokens();
-      
+
       // Show logout message
       eventEmitter.emit('toast:info', 'You have been logged out');
     }
@@ -192,7 +209,7 @@ export const AuthProvider = ({ children }) => {
     if (user && user.user_class === 'Director') {
       return true;
     }
-    
+
     // If user object doesn't have user_class or it's not Director, check the token
     if (authToken) {
       const tokenPayload = decodeToken(authToken);
@@ -200,7 +217,7 @@ export const AuthProvider = ({ children }) => {
         return true;
       }
     }
-    
+
     return false;
   };
 
@@ -208,14 +225,14 @@ export const AuthProvider = ({ children }) => {
   const decodeToken = (token) => {
     try {
       if (!token) return null;
-      
+
       // Split the token and get the payload part (middle)
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      
+
       // Create a new buffer and decode
       const jsonPayload = global.atob(base64);
-      
+
       // Parse the JSON payload
       const payload = JSON.parse(jsonPayload);
       return payload;
@@ -236,7 +253,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     isDirector,
     initialized,
-    isAuthenticated
+    isAuthenticated,
+    isOfflineMode
   };
 
   return (
