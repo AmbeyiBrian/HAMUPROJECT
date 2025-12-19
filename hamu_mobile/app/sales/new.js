@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -33,7 +33,7 @@ export default function NewSaleScreen() {
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     customer: null,
     customerName: 'Walk-in Customer',
@@ -44,9 +44,9 @@ export default function NewSaleScreen() {
     shop: null,
     agent_name: ''
   });
-  
+
   const [errors, setErrors] = useState({});
-  
+
   const { user } = useAuth();
   const router = useRouter();
 
@@ -54,24 +54,24 @@ export default function NewSaleScreen() {
     const loadInitialData = async () => {
       try {
         setIsLoading(true);
-        
+
         const promises = [
           api.getCustomers(),
           api.getPackages(1, { sale_type: 'SALE' })
         ];
-        
+
         if (user && user.user_class === 'Director') {
-          promises.push(api.fetch('shops/'));
+          promises.push(api.getShops());  // Use getShops for caching
         }
-        
+
         const responses = await Promise.all(promises);
-        
+
         const customersResponse = responses[0];
         const packagesResponse = responses[1];
-        
+
         setCustomers(customersResponse.results || []);
         setFilteredCustomers(customersResponse.results || []);
-        
+
         const salePackages = packagesResponse.results || [];
         setPackages(salePackages);
 
@@ -80,7 +80,7 @@ export default function NewSaleScreen() {
         } else if (user.shop_details) {
           // For agents, filter packages for their assigned shop
           const shopPackages = salePackages.filter(pkg => pkg.shop === user.shop_details.id);
-          
+
           // If no matches, try matching by shop_details.id
           if (shopPackages.length === 0) {
             const shopPackagesAlt = salePackages.filter(pkg => pkg.shop_details && pkg.shop_details.id === user.shop_details.id);
@@ -88,10 +88,10 @@ export default function NewSaleScreen() {
           } else {
             setFilteredPackages(shopPackages);
           }
-          
+
           // Log for debugging
           console.log(`Found ${filteredPackages.length} packages for agent's shop`);
-          
+
           setFormData(prev => ({
             ...prev,
             shop: user.shop_details.id,
@@ -107,7 +107,7 @@ export default function NewSaleScreen() {
         setIsLoading(false);
       }
     };
-    
+
     loadInitialData();
   }, [user]);
 
@@ -127,16 +127,16 @@ export default function NewSaleScreen() {
       ...prev,
       [name]: value
     }));
-    
+
     if (name === 'package') {
       const selectedPkg = packages.find(p => p.id === value);
       setSelectedPackage(selectedPkg);
     }
-    
+
     if (name === 'shop' && value) {
       const shopPackages = packages.filter(pkg => pkg.shop_details.id === value);
       setFilteredPackages(shopPackages);
-      
+
       if (formData.package) {
         const packageStillValid = shopPackages.some(pkg => pkg.id === formData.package);
         if (!packageStillValid) {
@@ -148,7 +148,7 @@ export default function NewSaleScreen() {
         }
       }
     }
-    
+
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -156,7 +156,7 @@ export default function NewSaleScreen() {
       }));
     }
   };
-  
+
   const handleSelectCustomer = (customer) => {
     setFormData(prev => ({
       ...prev,
@@ -164,11 +164,11 @@ export default function NewSaleScreen() {
       customerName: customer.names,
       shop: customer.shop_details.id
     }));
-    
+
     const customerShopId = customer.shop_details.id;
     const shopPackages = packages.filter(pkg => pkg.shop_details.id === customerShopId);
     setFilteredPackages(shopPackages);
-    
+
     if (formData.package) {
       const packageStillValid = shopPackages.some(pkg => pkg.id === formData.package);
       if (!packageStillValid) {
@@ -179,10 +179,10 @@ export default function NewSaleScreen() {
         setSelectedPackage(null);
       }
     }
-    
+
     setShowCustomerModal(false);
   };
-  
+
   const searchCustomers = useCallback(
     debounce(async (query) => {
       if (!query.trim()) {
@@ -190,13 +190,13 @@ export default function NewSaleScreen() {
         setIsSearching(false);
         return;
       }
-      
+
       try {
         const response = await api.getCustomers(1, { search: query });
         setFilteredCustomers(response.results || []);
       } catch (error) {
         console.error('Failed to search customers:', error);
-        const filtered = customers.filter(customer => 
+        const filtered = customers.filter(customer =>
           customer.names.toLowerCase().includes(query.toLowerCase()) ||
           customer.phone_number.includes(query)
         );
@@ -207,7 +207,7 @@ export default function NewSaleScreen() {
     }, 300),
     [customers]
   );
-  
+
   const handleCustomerSearchChange = (text) => {
     setCustomerSearchQuery(text);
     setIsSearching(true);
@@ -216,25 +216,25 @@ export default function NewSaleScreen() {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.package) {
       newErrors.package = 'Please select a product';
     }
-    
+
     if (!formData.payment_mode) {
       newErrors.payment_mode = 'Please select payment method';
     }
-    
+
     const quantity = parseInt(formData.quantity);
     if (isNaN(quantity) || quantity <= 0) {
       newErrors.quantity = 'Please enter a valid quantity';
     }
-    
+
     // Only validate shop for Directors
     if (user.user_class === 'Director' && !formData.shop) {
       newErrors.shop = 'Shop is required';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -243,10 +243,10 @@ export default function NewSaleScreen() {
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
+
       const saleData = {
         customer: formData.customer,
         package: parseInt(formData.package),
@@ -256,11 +256,11 @@ export default function NewSaleScreen() {
         shop: parseInt(formData.shop),
         agent_name: formData.agent_name || user.names
       };
-      
+
       console.log('Submitting sale data:', saleData);
-      
+
       await api.createSale(saleData);
-      
+
       Alert.alert(
         'Success',
         'Sale recorded successfully',
@@ -268,7 +268,7 @@ export default function NewSaleScreen() {
       );
     } catch (error) {
       console.error('Failed to record sale:', error);
-      
+
       let errorMsg = 'Failed to record sale. Please try again.';
       if (error.data) {
         try {
@@ -279,7 +279,7 @@ export default function NewSaleScreen() {
       } else if (error.message) {
         errorMsg = error.message;
       }
-      
+
       Alert.alert('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
@@ -310,7 +310,7 @@ export default function NewSaleScreen() {
           <Text style={styles.headerTitle}>New Sale</Text>
           <Text style={styles.headerSubtitle}>Record a new water sale</Text>
         </View>
-        
+
         <View style={styles.formContainer}>
           {/* Shop Selection - Only shown to Directors */}
           {user.user_class === 'Director' && (
@@ -324,10 +324,10 @@ export default function NewSaleScreen() {
                 >
                   <Picker.Item label="Select a shop" value={null} />
                   {shops.map(shop => (
-                    <Picker.Item 
-                      key={shop.id} 
-                      label={shop.shopName} 
-                      value={shop.id} 
+                    <Picker.Item
+                      key={shop.id}
+                      label={shop.shopName}
+                      value={shop.id}
                     />
                   ))}
                 </Picker>
@@ -348,7 +348,7 @@ export default function NewSaleScreen() {
               <Ionicons name="search" size={20} color={Colors.primary} />
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Product *</Text>
             <View style={[styles.pickerContainer, errors.package && styles.inputError]}>
@@ -360,10 +360,10 @@ export default function NewSaleScreen() {
               >
                 <Picker.Item label="Select a product" value={null} />
                 {filteredPackages.map(pkg => (
-                  <Picker.Item 
-                    key={pkg.id} 
-                    label={`${pkg.description} ${pkg.bottle_type ? `(${pkg.bottle_type})` : ''} - ${formatCurrency(pkg.price)}`} 
-                    value={pkg.id} 
+                  <Picker.Item
+                    key={pkg.id}
+                    label={`${pkg.description} ${pkg.bottle_type ? `(${pkg.bottle_type})` : ''} - ${formatCurrency(pkg.price)}`}
+                    value={pkg.id}
                   />
                 ))}
               </Picker>
@@ -380,7 +380,7 @@ export default function NewSaleScreen() {
               </Text>
             )}
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Quantity *</Text>
             <TextInput
@@ -393,7 +393,7 @@ export default function NewSaleScreen() {
             />
             {errors.quantity && <Text style={styles.errorText}>{errors.quantity}</Text>}
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Payment Method *</Text>
             <View style={[styles.pickerContainer, errors.payment_mode && styles.inputError]}>
@@ -409,7 +409,7 @@ export default function NewSaleScreen() {
             </View>
             {errors.payment_mode && <Text style={styles.errorText}>{errors.payment_mode}</Text>}
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Total Cost</Text>
             <View style={styles.calculatedValueContainer}>
@@ -418,7 +418,7 @@ export default function NewSaleScreen() {
               </Text>
             </View>
           </View>
-          
+
           <TouchableOpacity
             style={[styles.submitButton, isSubmitting && styles.disabledButton]}
             onPress={handleSubmit}
@@ -435,7 +435,7 @@ export default function NewSaleScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-      
+
       <Modal
         visible={showCustomerModal}
         animationType="slide"
@@ -450,7 +450,7 @@ export default function NewSaleScreen() {
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.searchBox}>
               <Ionicons name="search" size={20} color={Colors.lightText} />
               <TextInput
@@ -470,7 +470,7 @@ export default function NewSaleScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-            
+
             {isSearching ? (
               <ActivityIndicator color={Colors.primary} style={styles.searchingIndicator} />
             ) : (
@@ -507,24 +507,24 @@ export default function NewSaleScreen() {
                 contentContainerStyle={{ flexGrow: 1 }}
               />
             )}
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.walkInButton}
               onPress={() => {
                 const shopId = user.user_class === 'Director' ? null : user.shop_details.id;
-                
+
                 setFormData(prev => ({
                   ...prev,
                   customer: null,
                   customerName: 'Walk-in Customer',
                   shop: shopId
                 }));
-                
+
                 if (user.shop_details) {
                   const shopPackages = packages.filter(pkg => pkg.shop === user.shop_details.id);
                   setFilteredPackages(shopPackages);
                 }
-                
+
                 setShowCustomerModal(false);
               }}
             >

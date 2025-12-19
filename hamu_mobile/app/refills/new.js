@@ -61,11 +61,20 @@ export default function NewRefillScreen() {
       try {
         setIsLoading(true);
 
-        // Load customers and packages in parallel
-        const [customersResponse, packagesResponse] = await Promise.all([
+        // Load customers, packages, and shops (for directors) in parallel
+        const promises = [
           api.getCustomers(),
-          api.getPackages(1, { sale_type: 'REFILL' }) // Using getPackages() method instead of direct fetch
-        ]);
+          api.getPackages(1, { sale_type: 'REFILL' })
+        ];
+
+        // Directors need shops list loaded for offline caching
+        if (user && user.user_class === 'Director') {
+          promises.push(api.getShops());
+        }
+
+        const responses = await Promise.all(promises);
+        const customersResponse = responses[0];
+        const packagesResponse = responses[1];
 
         setCustomers(customersResponse.results || []);
         setFilteredCustomers(customersResponse.results || []);
@@ -87,7 +96,7 @@ export default function NewRefillScreen() {
             agent_name: user.names
           }));
         } else {
-          // For directors, initially show no packages until a shop is selected
+          // For directors, initially show no packages until a customer is selected
           setFilteredPackages([]);
         }
       } catch (error) {
