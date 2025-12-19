@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -32,7 +32,7 @@ export default function NewRefillScreen() {
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     customer: null,
     customerName: 'Walk-in Customer',
@@ -49,9 +49,9 @@ export default function NewRefillScreen() {
     free_quantity: 0,
     paidQuantity: 0
   });
-  
+
   const [errors, setErrors] = useState({});
-  
+
   const { user } = useAuth();
   const router = useRouter();
 
@@ -60,26 +60,26 @@ export default function NewRefillScreen() {
     const loadInitialData = async () => {
       try {
         setIsLoading(true);
-        
+
         // Load customers and packages in parallel
         const [customersResponse, packagesResponse] = await Promise.all([
           api.getCustomers(),
           api.getPackages(1, { sale_type: 'REFILL' }) // Using getPackages() method instead of direct fetch
         ]);
-        
+
         setCustomers(customersResponse.results || []);
         setFilteredCustomers(customersResponse.results || []);
-        
+
         // Store all packages but don't filter them yet
         const refillPackages = packagesResponse.results || [];
         setPackages(refillPackages);
-        
+
         // Initialize filtered packages
         // If user is a shop agent, only show packages for their shop
         if (user && user.shop) {
           const shopPackages = refillPackages.filter(pkg => pkg.shop === user.shop.id);
           setFilteredPackages(shopPackages);
-          
+
           // Set current user's shop
           setFormData(prev => ({
             ...prev,
@@ -97,7 +97,7 @@ export default function NewRefillScreen() {
         setIsLoading(false);
       }
     };
-    
+
     loadInitialData();
   }, [user]);
 
@@ -108,15 +108,15 @@ export default function NewRefillScreen() {
     let freeQuantity = 0;
     let paidQuantity = quantity;
     let totalCost = 0;
-    
+
     // If customer is eligible for free refills and auto-apply is enabled
     if (formData.customer && formData.eligibleFreeRefills > 0) {
       // Calculate how many free refills to apply based on quantity
       // Each unit in quantity counts as an individual refill for loyalty
       freeQuantity = Math.min(quantity, formData.eligibleFreeRefills);
       paidQuantity = quantity - freeQuantity;
-      
-      
+
+
       // Update the payment mode if there are any free refills
       if (freeQuantity > 0 && paidQuantity === 0) {
         setFormData(prev => ({
@@ -136,11 +136,12 @@ export default function NewRefillScreen() {
       }
     } else {
       // No free refills available, set to full paid quantity
-      paidQuantity = quantity;     }
-    
+      paidQuantity = quantity;
+    }
+
     // Calculate cost for paid quantity only
     totalCost = pkg.price * paidQuantity;
-    
+
     // Update formData with the breakdown details
     setFormData(prev => ({
       ...prev,
@@ -152,7 +153,7 @@ export default function NewRefillScreen() {
       totalAmount: quantity,
       remainingFreeRefills: prev.eligibleFreeRefills - freeQuantity
     }));
-    
+
   };
 
   // Update price when package or quantity changes, with debounce for quantity
@@ -173,7 +174,7 @@ export default function NewRefillScreen() {
         if (selectedPackage) {
           calculateCost(formData.quantity, selectedPackage);
         }
-        
+
         // Then schedule the actual API call with debounce
         debouncedCheckEligibility(formData.customer, formData.package, formData.quantity);
       }
@@ -181,7 +182,7 @@ export default function NewRefillScreen() {
       // If no customer is selected, just do the basic calculation
       calculateCost(formData.quantity, selectedPackage);
     }
-    
+
     // Cleanup function to cancel pending debounced calls when component unmounts
     // or when inputs change before the debounced function is called
     return () => {
@@ -195,13 +196,13 @@ export default function NewRefillScreen() {
       ...prev,
       [name]: value
     }));
-    
+
     // Special handling for package selection
     if (name === 'package') {
       const selectedPkg = packages.find(p => p.id === value);
       setSelectedPackage(selectedPkg);
     }
-    
+
     // Special handling for payment mode
     if (name === 'payment_mode' && value === 'FREE') {
       setFormData(prev => ({
@@ -214,7 +215,7 @@ export default function NewRefillScreen() {
         ...prev,
         is_free: false
       }));
-      
+
       // Recalculate cost if package is selected
       if (selectedPackage && formData.quantity) {
         const quantity = parseInt(formData.quantity) || 0;
@@ -225,7 +226,7 @@ export default function NewRefillScreen() {
         }));
       }
     }
-    
+
     // Clear errors when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -244,14 +245,14 @@ export default function NewRefillScreen() {
       customerName: customer.names,
       shop: customer.shop_details.id,
       freeRefillInterval: customer.shop_details.freeRefillInterval,
-      agent_name:user.names
+      agent_name: user.names
     }));
 
     // Filter packages to only show ones for this customer's shop
     const customerShopId = customer.shop_details.id;
     const shopPackages = packages.filter(pkg => pkg.shop_details.id === customerShopId);
     setFilteredPackages(shopPackages);
-    
+
     // Reset package selection if previously selected package isn't available for this shop
     if (formData.package) {
       const packageStillValid = shopPackages.some(pkg => pkg.id === formData.package);
@@ -265,11 +266,11 @@ export default function NewRefillScreen() {
     }
 
     setShowCustomerModal(false);
-    
+
     // If customer is eligible for free refill, prompt to use it
     checkFreeRefillEligibility(customer.id, formData.package, formData.quantity);
   };
-  
+
   // Search customers
   const searchCustomers = useCallback(
     debounce(async (query) => {
@@ -278,7 +279,7 @@ export default function NewRefillScreen() {
         setIsSearching(false);
         return;
       }
-      
+
       try {
         // Fetch customers from the backend with search query
         const response = await api.getCustomers(1, { search: query });
@@ -286,7 +287,7 @@ export default function NewRefillScreen() {
       } catch (error) {
         console.error('Failed to search customers:', error);
         // Fallback to local filtering if API search fails
-        const filtered = customers.filter(customer => 
+        const filtered = customers.filter(customer =>
           customer.names.toLowerCase().includes(query.toLowerCase()) ||
           customer.phone_number.includes(query)
         );
@@ -297,25 +298,25 @@ export default function NewRefillScreen() {
     }, 300),
     [customers]
   );
-  
+
   // Handle customer search input change
   const handleCustomerSearchChange = (text) => {
     setCustomerSearchQuery(text);
     setIsSearching(true);
     searchCustomers(text);
   };
-  
+
   // Check if customer is eligible for free refill
   const checkFreeRefillEligibility = async (customerId, packageId, quantityStr) => {
     if (!customerId || !packageId) return;
-    
+
     try {
-      
+
       const quantity = parseInt(quantityStr || '1');
-      
+
       // Use the new endpoint that calculates loyalty discounts based on customer, package and quantity
       const response = await api.fetch(`refills/customer_loyalty_info/?customer_id=${customerId}&package_id=${packageId}&quantity=${quantity}`);
-            
+
       if (response) {
         // Store all the loyalty information for calculations and display
         setFormData(prev => ({
@@ -327,16 +328,16 @@ export default function NewRefillScreen() {
           paidQuantity: response.paid_quantity || quantity,
           cost: response.total_cost.toString(),
           refillsUntilNextFree: response.refills_until_next_free || 0,
-          
+
           // Keep the format expected by the rest of the app
           free_quantity: response.free_quantity || 0,
           paid_quantity: response.paid_quantity || quantity,
-          
+
           // Set is_free and is_partially_free based on the quantities
           is_free: response.free_quantity > 0 && response.paid_quantity === 0,
           is_partially_free: response.free_quantity > 0 && response.paid_quantity > 0
         }));
-        
+
         // Show appropriate message based on free refill availability
         if (response.free_quantity > 0) {
           Alert.alert(
@@ -361,8 +362,8 @@ export default function NewRefillScreen() {
           Alert.alert(
             'Loyalty Program Update',
             `This customer has purchased ${response.paid_refills_count} unit(s) so far.\n\n` +
-            (response.refills_until_next_free > 0 
-              ? `They need ${response.refills_until_next_free} more unit(s) to earn their next free refill.` 
+            (response.refills_until_next_free > 0
+              ? `They need ${response.refills_until_next_free} more unit(s) to earn their next free refill.`
               : `They'll earn a free unit after every ${response.free_refill_interval} paid units.`),
             [{ text: 'OK' }]
           );
@@ -377,32 +378,58 @@ export default function NewRefillScreen() {
       }
     } catch (error) {
       console.error('Failed to check free refill eligibility:', error);
-      Alert.alert('Error', 'Failed to check loyalty program eligibility');
+      // When offline, allow proceeding without loyalty calculation
+      // The backend will recalculate loyalty when the transaction syncs
+      const quantity = parseInt(quantityStr || '1');
+      const packagePrice = selectedPackage?.price || 0;
+      const fullPrice = quantity * packagePrice;
+
+      // Set form to full price (no free refills applied)
+      setFormData(prev => ({
+        ...prev,
+        freeQuantity: 0,
+        paidQuantity: quantity,
+        cost: fullPrice.toString(),
+        free_quantity: 0,
+        paid_quantity: quantity,
+        is_free: false,
+        is_partially_free: false,
+        // Mark as offline-calculated so we know loyalty wasn't applied
+        loyaltyCheckedOffline: true
+      }));
+
+      Alert.alert(
+        'Offline Mode',
+        `Unable to check loyalty program (no connection).\n\n` +
+        `The refill will be recorded at full price (KSH ${fullPrice.toFixed(2)}).\n\n` +
+        `Note: When you sync this transaction, the server will apply any eligible loyalty discounts.`,
+        [{ text: 'OK' }]
+      );
     }
   };
 
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.package) {
       newErrors.package = 'Please select a product';
     }
-    
+
     if (!formData.payment_mode) {
       newErrors.payment_mode = 'Please select payment method';
     }
-    
+
     // Convert quantity to number for validation
     const quantity = parseInt(formData.quantity);
     if (isNaN(quantity) || quantity <= 0) {
       newErrors.quantity = 'Please enter a valid quantity';
     }
-    
+
     if (!formData.shop) {
       newErrors.shop = 'Shop is required';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -413,22 +440,22 @@ export default function NewRefillScreen() {
       Alert.alert('Error', 'Please complete all required fields');
       return;
     }
-    
+
     setIsSubmitting(true);
 
     try {
       // If we have customer and package but haven't checked eligibility yet, do it now
-      if (formData.customer && formData.package && !formData.eligibleFreeRefills && 
-          formData.freeQuantity === 0 && formData.paidQuantity === 0) {
+      if (formData.customer && formData.package && !formData.eligibleFreeRefills &&
+        formData.freeQuantity === 0 && formData.paidQuantity === 0) {
         // This ensures we have the correct free/paid breakdown before submitting
         await checkFreeRefillEligibility(formData.customer, formData.package, formData.quantity);
       }
-      
+
       // Prepare refill data - matching exactly what the serializer expects
       const totalQuantity = parseInt(formData.quantity) || 0;
       const isFree = formData.is_free || (formData.freeQuantity > 0 && formData.paidQuantity === 0);
       const isPartiallyFree = formData.freeQuantity > 0 && formData.paidQuantity > 0;
-      
+
       // Base refill data - match serializer field names exactly
       let refillData = {
         customer: formData.customer,
@@ -441,7 +468,7 @@ export default function NewRefillScreen() {
         is_free: isFree,
         is_partially_free: isPartiallyFree,
       };
-      
+
       // Add loyalty and free/paid quantities data
       if (formData.freeQuantity > 0 || isPartiallyFree) {
         refillData.free_quantity = parseInt(formData.freeQuantity) || 0;
@@ -464,23 +491,23 @@ export default function NewRefillScreen() {
 
       // After successful submission
       Alert.alert(
-        "Success", 
-        "Refill recorded successfully", 
+        "Success",
+        "Refill recorded successfully",
         [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (error) {
       console.error("Error submitting refill:", error);
-      
+
       // More detailed error handling
       let errorMsg = "An error occurred while submitting the refill";
       if (error.response) {
-        errorMsg = error.response.data?.detail || 
-                  (typeof error.response.data === 'object' ? 
-                   JSON.stringify(error.response.data) : 
-                   error.response.data) ||
-                  errorMsg;
+        errorMsg = error.response.data?.detail ||
+          (typeof error.response.data === 'object' ?
+            JSON.stringify(error.response.data) :
+            error.response.data) ||
+          errorMsg;
       }
-      
+
       Alert.alert("Error", errorMsg);
     } finally {
       setIsSubmitting(false);
@@ -497,7 +524,7 @@ export default function NewRefillScreen() {
     if (!selectedPackage || !formData.customer || !formData.freeQuantity) {
       return null;
     }
-    
+
     return (
       <View style={styles.breakdownContainer}>
         <Text style={styles.breakdownTitle}>Refill Breakdown:</Text>
@@ -520,14 +547,14 @@ export default function NewRefillScreen() {
     if (!formData.customer || (!formData.eligibleFreeRefills && !formData.freeRefillInterval)) {
       return null;
     }
-    
+
     return (
       <View style={styles.loyaltyContainer}>
         <View style={styles.loyaltyHeader}>
           <Ionicons name="gift-outline" size={20} color={Colors.primary} />
           <Text style={styles.loyaltyTitle}>Loyalty Program Summary</Text>
         </View>
-        
+
         <View style={styles.loyaltyStats}>
           {formData.freeRefillInterval > 0 && (
             <View style={styles.loyaltyStat}>
@@ -537,21 +564,21 @@ export default function NewRefillScreen() {
               </Text>
             </View>
           )}
-          
+
           {formData.paidRefillsCount > 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Paid Refills:</Text>
               <Text style={styles.loyaltyValue}>{formData.paidRefillsCount}</Text>
             </View>
           )}
-          
+
           {formData.freeRefillsUsed >= 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Free Refills Used:</Text>
               <Text style={styles.loyaltyValue}>{formData.freeRefillsUsed}</Text>
             </View>
           )}
-          
+
           {formData.eligibleFreeRefills > 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Available Free Refills:</Text>
@@ -560,7 +587,7 @@ export default function NewRefillScreen() {
               </Text>
             </View>
           )}
-          
+
           {formData.freeQuantity > 0 && selectedPackage && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Free in this transaction:</Text>
@@ -569,7 +596,7 @@ export default function NewRefillScreen() {
               </Text>
             </View>
           )}
-          
+
           {formData.remainingFreeRefills >= 0 && formData.freeQuantity > 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Remaining after transaction:</Text>
@@ -586,14 +613,14 @@ export default function NewRefillScreen() {
     if (!formData.customer || (!formData.eligibleFreeRefills && !formData.freeRefillInterval)) {
       return null;
     }
-    
+
     return (
       <View style={styles.loyaltyContainer}>
         <View style={styles.loyaltyHeader}>
           <Ionicons name="gift-outline" size={20} color={Colors.primary} />
           <Text style={styles.loyaltyTitle}>Loyalty Program Summary</Text>
         </View>
-        
+
         <View style={styles.loyaltyStats}>
           {formData.freeRefillInterval > 0 && (
             <View style={styles.loyaltyStat}>
@@ -603,21 +630,21 @@ export default function NewRefillScreen() {
               </Text>
             </View>
           )}
-          
+
           {formData.paidRefillsCount > 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Paid Refills:</Text>
               <Text style={styles.loyaltyValue}>{formData.paidRefillsCount}</Text>
             </View>
           )}
-          
+
           {formData.freeRefillsUsed >= 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Free Refills Used:</Text>
               <Text style={styles.loyaltyValue}>{formData.freeRefillsUsed}</Text>
             </View>
           )}
-          
+
           {formData.eligibleFreeRefills > 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Available Free Refills:</Text>
@@ -626,7 +653,7 @@ export default function NewRefillScreen() {
               </Text>
             </View>
           )}
-          
+
           {formData.freeQuantity > 0 && selectedPackage && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Free in this transaction:</Text>
@@ -635,7 +662,7 @@ export default function NewRefillScreen() {
               </Text>
             </View>
           )}
-          
+
           {formData.remainingFreeRefills >= 0 && formData.freeQuantity > 0 && (
             <View style={styles.loyaltyStat}>
               <Text style={styles.loyaltyLabel}>Remaining after transaction:</Text>
@@ -643,39 +670,39 @@ export default function NewRefillScreen() {
             </View>
           )}
         </View>
-        
+
         {/* Add prominent payment summary */}
         {formData.quantity > 0 && selectedPackage && (
           <View style={styles.paymentSummary}>
             <View style={styles.paymentSummaryHeader}>
               <Text style={styles.paymentSummaryTitle}>Payment Breakdown</Text>
             </View>
-            
+
             <View style={styles.paymentDetails}>
               <View style={styles.paymentRow}>
                 <Text style={styles.paymentLabel}>Total Refills:</Text>
                 <Text style={styles.paymentValue}>{formData.quantity} × {selectedPackage.water_amount_label}</Text>
               </View>
-              
+
               <View style={styles.paymentRow}>
                 <Text style={styles.paymentLabel}>Unit Price:</Text>
                 <Text style={styles.paymentValue}>{formatCurrency(selectedPackage.price)}</Text>
               </View>
-              
+
               {formData.freeQuantity > 0 && (
                 <>
                   <View style={styles.paymentRow}>
                     <Text style={styles.paymentLabel}>Paid Refills:</Text>
                     <Text style={styles.paymentValue}>{formData.paidQuantity} × {selectedPackage.water_amount_label}</Text>
                   </View>
-                  
+
                   <View style={styles.paymentRow}>
                     <Text style={[styles.paymentLabel, styles.freeLabel]}>Free Refills:</Text>
                     <Text style={[styles.paymentValue, styles.freeValue]}>{formData.freeQuantity} × {selectedPackage.water_amount_label}</Text>
                   </View>
                 </>
               )}
-              
+
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total to Pay:</Text>
                 <Text style={styles.totalValue}>{formatCurrency(formData.cost)}</Text>
@@ -695,28 +722,28 @@ export default function NewRefillScreen() {
 
     try {
       setIsLoading(true);
-      
+
       // Fetch loyalty data for the customer
       const loyaltyResponse = await axios.get(
         `${BASE_URL}/api/refills/customer_loyalty_info/${formData.customer.id}/${formData.package}/`
       );
-      
-      const { 
-        free_refill_interval, 
+
+      const {
+        free_refill_interval,
         eligible_free_refills,
-        paid_refills_count 
+        paid_refills_count
       } = loyaltyResponse.data;
-      
+
       // Calculate how many free refills to apply to this transaction
       const freeToApply = Math.min(eligible_free_refills || 0, formData.quantity);
       const paidQuantity = Math.max(0, formData.quantity - freeToApply);
-      
+
       // Calculate amount based on paid quantity only
       const amount = paidQuantity * selectedPackage.price;
-      
+
       // Calculate remaining free refills after this transaction
       const remainingFreeRefills = Math.max(0, (eligible_free_refills || 0) - freeToApply);
-      
+
       setFormData({
         ...formData,
         amount: amount,
@@ -728,7 +755,7 @@ export default function NewRefillScreen() {
         paidRefillsCount: paid_refills_count || 0,
         freeRefillsUsed: eligible_free_refills ? (eligible_free_refills - remainingFreeRefills) : 0
       });
-      
+
       setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
@@ -757,8 +784,8 @@ export default function NewRefillScreen() {
           <Text style={styles.headerTitle}>New Refill</Text>
           <Text style={styles.headerSubtitle}>Record a new water refill</Text>
         </View>
-        
-        <View style={styles.formContainer}>          
+
+        <View style={styles.formContainer}>
           {/* Customer (with search) */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Customer</Text>
@@ -777,7 +804,7 @@ export default function NewRefillScreen() {
               </Text>
             )}
           </View>
-          
+
           {/* Product/Package */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Product *</Text>
@@ -790,10 +817,10 @@ export default function NewRefillScreen() {
               >
                 <Picker.Item label="Select a product" value={null} />
                 {filteredPackages.map(pkg => (
-                  <Picker.Item 
-                    key={pkg.id} 
-                    label={`${pkg.water_amount_label} - ${formatCurrency(pkg.price)}`} 
-                    value={pkg.id} 
+                  <Picker.Item
+                    key={pkg.id}
+                    label={`${pkg.water_amount_label} - ${formatCurrency(pkg.price)}`}
+                    value={pkg.id}
                   />
                 ))}
               </Picker>
@@ -806,13 +833,13 @@ export default function NewRefillScreen() {
             )}
             {!formData.shop && (
               <Text style={styles.warningText}>
-                {user.user_class === 'Director' 
-                  ? 'Please select a shop first to see available products' 
+                {user.user_class === 'Director'
+                  ? 'Please select a shop first to see available products'
                   : 'Please select a customer first to see available products'}
               </Text>
             )}
           </View>
-          
+
           {/* Quantity */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Quantity *</Text>
@@ -826,7 +853,7 @@ export default function NewRefillScreen() {
             />
             {errors.quantity && <Text style={styles.errorText}>{errors.quantity}</Text>}
           </View>
-          
+
           {/* Payment Mode */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Payment Method *</Text>
@@ -843,7 +870,7 @@ export default function NewRefillScreen() {
             </View>
             {errors.payment_mode && <Text style={styles.errorText}>{errors.payment_mode}</Text>}
           </View>
-          
+
           {/* Total Cost (calculated) */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Total Cost</Text>
@@ -859,7 +886,7 @@ export default function NewRefillScreen() {
 
           {/* Loyalty Summary */}
           {renderLoyaltySummary()}
-          
+
           {/* Submit Button */}
           <TouchableOpacity
             style={[styles.submitButton, isSubmitting && styles.disabledButton]}
@@ -877,7 +904,7 @@ export default function NewRefillScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-      
+
       {/* Customer Selection Modal */}
       <Modal
         visible={showCustomerModal}
@@ -893,7 +920,7 @@ export default function NewRefillScreen() {
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.searchBox}>
               <Ionicons name="search" size={20} color={Colors.lightText} />
               <TextInput
@@ -913,7 +940,7 @@ export default function NewRefillScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-            
+
             {isSearching ? (
               <ActivityIndicator color={Colors.primary} style={styles.searchingIndicator} />
             ) : (
@@ -950,8 +977,8 @@ export default function NewRefillScreen() {
                 contentContainerStyle={{ flexGrow: 1 }}
               />
             )}
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.walkInButton}
               onPress={() => {
                 // For walk-in customers, keep shop as is (don't change on selection)
@@ -961,7 +988,7 @@ export default function NewRefillScreen() {
                   customer: null,
                   customerName: 'Walk-in Customer'
                 }));
-                
+
                 setShowCustomerModal(false);
               }}
             >

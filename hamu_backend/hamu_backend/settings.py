@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # Required for token rotation/blacklisting
     'corsheaders',  # Add CORS headers app
     'shops',
     'users',
