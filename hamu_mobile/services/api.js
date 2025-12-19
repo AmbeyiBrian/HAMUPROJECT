@@ -676,20 +676,33 @@ class Api {
         page,
         ...filters
       });
-      // Cache packages for offline use (only first page)
-      if (page === 1 && data.results) {
-        await cacheService.cachePackages(data.results);
+      // Cache packages for offline use (cache ALL packages, not filtered)
+      const results = data.results || data;
+      if (page === 1 && results && Array.isArray(results) && results.length > 0) {
+        // Get existing cached packages and merge
+        const existingCache = await cacheService.getCachedPackages() || [];
+        // Create a map for deduplication by ID
+        const packageMap = new Map();
+        existingCache.forEach(pkg => packageMap.set(pkg.id, pkg));
+        results.forEach(pkg => packageMap.set(pkg.id, pkg));
+        await cacheService.cachePackages(Array.from(packageMap.values()));
+        console.log('[API] Packages cached - total:', packageMap.size);
       }
       return data;
     } catch (error) {
       console.log('[API] getPackages failed, trying cache');
       const cachedPackages = await cacheService.getCachedPackages();
-      if (cachedPackages && page === 1) {
-        console.log('[API] Using cached packages');
-        // Filter cached packages if sale_type filter is provided
+      if (cachedPackages && cachedPackages.length > 0) {
+        console.log('[API] Using cached packages:', cachedPackages.length);
+        // Filter cached packages based on filters
         let filteredPackages = cachedPackages;
         if (filters.sale_type) {
-          filteredPackages = cachedPackages.filter(pkg => pkg.sale_type === filters.sale_type);
+          filteredPackages = filteredPackages.filter(pkg => pkg.sale_type === filters.sale_type);
+        }
+        if (filters.shop) {
+          filteredPackages = filteredPackages.filter(pkg =>
+            pkg.shop === filters.shop || pkg.shop_details?.id === filters.shop
+          );
         }
         return { results: filteredPackages, fromCache: true };
       }
