@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { offlineQueue } from './OfflineQueue';
 import { syncService } from './SyncService';
+import { cacheService } from './CacheService';
 
 // Base URL for the API
 // Standard local network IP typically starts with 192.168.x.x
@@ -428,12 +429,29 @@ class Api {
 
   /**
    * Get all shops with pagination support
+   * Caches results for offline use
    * @param {number} page - Page number (1-based)
    * @param {Object} filters - Filters to apply
    * @returns {Promise<Object>} - Paginated list of shops
    */
   async getShops() {
-    return this.fetch('shops/');
+    try {
+      const data = await this.fetch('shops/');
+      // Cache shops for offline use
+      const results = data.results || data;
+      if (results && Array.isArray(results)) {
+        await cacheService.cacheShops(results);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getShops failed, trying cache');
+      const cachedShops = await cacheService.getCachedShops();
+      if (cachedShops) {
+        console.log('[API] Using cached shops');
+        return { results: cachedShops, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -510,15 +528,31 @@ class Api {
 
   /**
    * Get customers with pagination and filtering support
+   * Caches results for offline use
    * @param {number} page - Page number (1-based)
    * @param {Object} filters - Filters including shop_id and search query
    * @returns {Promise<Object>} - Paginated list of customers
    */
   async getCustomers(page = 1, filters = {}) {
-    return this.fetch('customers/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('customers/', {}, {
+        page,
+        ...filters
+      });
+      // Cache customers for offline use (only first page without search)
+      if (page === 1 && !filters.search && data.results) {
+        await cacheService.cacheCustomers(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getCustomers failed, trying cache');
+      const cachedCustomers = await cacheService.getCachedCustomers(filters.shop);
+      if (cachedCustomers && page === 1 && !filters.search) {
+        console.log('[API] Using cached customers');
+        return { results: cachedCustomers, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -631,15 +665,36 @@ class Api {
 
   /**
    * Get packages with pagination and filtering support
+   * Caches results for offline use
    * @param {number} page - Page number (1-based)
    * @param {Object} filters - Filters including shop_id
    * @returns {Promise<Object>} - Paginated list of packages
    */
   async getPackages(page = 1, filters = {}) {
-    return this.fetch('packages/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('packages/', {}, {
+        page,
+        ...filters
+      });
+      // Cache packages for offline use (only first page)
+      if (page === 1 && data.results) {
+        await cacheService.cachePackages(data.results);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getPackages failed, trying cache');
+      const cachedPackages = await cacheService.getCachedPackages();
+      if (cachedPackages && page === 1) {
+        console.log('[API] Using cached packages');
+        // Filter cached packages if sale_type filter is provided
+        let filteredPackages = cachedPackages;
+        if (filters.sale_type) {
+          filteredPackages = cachedPackages.filter(pkg => pkg.sale_type === filters.sale_type);
+        }
+        return { results: filteredPackages, fromCache: true };
+      }
+      throw error;
+    }
   }
 
   /**
