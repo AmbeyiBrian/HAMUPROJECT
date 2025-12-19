@@ -571,9 +571,26 @@ class Api {
       return data;
     } catch (error) {
       console.log('[API] getCustomers failed, trying cache');
-      const cachedCustomers = await cacheService.getCachedCustomers(filters.shop);
-      if (cachedCustomers && page === 1 && !filters.search) {
-        console.log('[API] Using cached customers');
+      // Try shop-specific cache first, then fallback to global cache
+      let cachedCustomers = await cacheService.getCachedCustomers(filters.shop);
+      if (!cachedCustomers && filters.shop) {
+        cachedCustomers = await cacheService.getCachedCustomers(null);
+        if (cachedCustomers) {
+          cachedCustomers = cachedCustomers.filter(customer =>
+            customer.shop === filters.shop || customer.shop_details?.id === filters.shop
+          );
+        }
+      }
+      // Apply local search filter if specified
+      if (cachedCustomers && filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        cachedCustomers = cachedCustomers.filter(customer =>
+          customer.names?.toLowerCase().includes(searchLower) ||
+          customer.phone_number?.includes(filters.search)
+        );
+      }
+      if (cachedCustomers && page === 1) {
+        console.log('[API] Using cached customers:', cachedCustomers.length);
         return { results: cachedCustomers, fromCache: true };
       }
       throw error;
