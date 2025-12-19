@@ -507,7 +507,8 @@ class Api {
         console.log('[API] Using cached stock items:', cachedItems.length);
         return { results: cachedItems, fromCache: true };
       }
-      throw error;
+      console.log('[API] No cached stock items, returning empty');
+      return { results: [], fromCache: true, offline: true };
     }
   }
 
@@ -593,7 +594,9 @@ class Api {
         console.log('[API] Using cached customers:', cachedCustomers.length);
         return { results: cachedCustomers, fromCache: true };
       }
-      throw error;
+      // Return empty results instead of throwing to prevent retry loop
+      console.log('[API] No cached customers available, returning empty');
+      return { results: [], fromCache: true, offline: true };
     }
   }
 
