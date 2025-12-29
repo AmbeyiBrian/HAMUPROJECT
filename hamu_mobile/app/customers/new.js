@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -34,7 +34,7 @@ export default function NewCustomerScreen() {
   const [loading, setLoading] = useState(false);
   const [shopModalVisible, setShopModalVisible] = useState(false);
   const [selectedShop, setSelectedShop] = useState(null);
-  
+
   const { user } = useAuth();
   const router = useRouter();
   const isDirector = user?.user_class === 'Director';
@@ -78,7 +78,7 @@ export default function NewCustomerScreen() {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear errors when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -91,22 +91,22 @@ export default function NewCustomerScreen() {
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.names.trim()) {
       newErrors.names = 'Customer name is required';
     }
-    
+
     // Basic phone number validation (Kenya format)
     if (!formData.phone_number.trim()) {
       newErrors.phone_number = 'Phone number is required';
     } else if (!/^(0|(\+?254))(7|1)[0-9]{8}$/.test(formData.phone_number.replace(/\s/g, ''))) {
       newErrors.phone_number = 'Enter a valid Kenyan phone number (e.g., 0712345678 or +254712345678)';
     }
-    
+
     if (isDirector && !selectedShop) {
       newErrors.shop = 'Please select a shop';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -116,25 +116,25 @@ export default function NewCustomerScreen() {
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
+
       const customerData = {
         ...formData,
-        shop: selectedShop?.id || user.shop_details.id,
+        shop: selectedShop?.id || user.shop_details?.id || user.shop?.id,
         registering_agent: user.names
       };
-      
+
       await api.createCustomer(customerData);
-      
+
       Alert.alert(
         'Success',
         'Customer added successfully',
         [
-          { 
-            text: 'OK', 
-            onPress: () => router.back() 
+          {
+            text: 'OK',
+            onPress: () => router.back()
           }
         ]
       );
@@ -159,7 +159,7 @@ export default function NewCustomerScreen() {
           <Text style={styles.headerTitle}>New Customer</Text>
           <Text style={styles.headerSubtitle}>Add a new water customer</Text>
         </View>
-        
+
         <View style={styles.formContainer}>
           {/* Shop Selection for Directors */}
           {isDirector && (
@@ -176,7 +176,7 @@ export default function NewCustomerScreen() {
               {errors.shop && <Text style={styles.errorText}>{errors.shop}</Text>}
             </View>
           )}
-          
+
           {/* Customer Name */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Full Name *</Text>
@@ -189,7 +189,7 @@ export default function NewCustomerScreen() {
             />
             {errors.names && <Text style={styles.errorText}>{errors.names}</Text>}
           </View>
-          
+
           {/* Phone Number */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Phone Number *</Text>
@@ -203,7 +203,7 @@ export default function NewCustomerScreen() {
             />
             {errors.phone_number && <Text style={styles.errorText}>{errors.phone_number}</Text>}
           </View>
-          
+
           {/* Apartment Name */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Apartment/Building Name</Text>
@@ -215,7 +215,7 @@ export default function NewCustomerScreen() {
               onChangeText={(value) => handleChange('apartment_name', value)}
             />
           </View>
-          
+
           {/* Room Number */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Room/House Number</Text>
@@ -227,7 +227,7 @@ export default function NewCustomerScreen() {
               onChangeText={(value) => handleChange('room_number', value)}
             />
           </View>
-          
+
           {/* Notes */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Additional Notes</Text>
@@ -242,7 +242,7 @@ export default function NewCustomerScreen() {
               textAlignVertical="top"
             />
           </View>
-          
+
           {/* Submit Button */}
           <TouchableOpacity
             style={[styles.submitButton, isSubmitting && styles.disabledButton]}

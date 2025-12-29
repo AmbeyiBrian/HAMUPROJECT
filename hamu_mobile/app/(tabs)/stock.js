@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  FlatList, 
-  TouchableOpacity, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
   TextInput,
@@ -41,13 +41,13 @@ export default function StockScreen() {
         } catch (error) {
           console.error('Failed to load shops:', error);
         }
-      } else if (user?.shop) {
+      } else if (user?.shop_details?.id) {
         // For agents, set their assigned shop as selected
         setSelectedShopId(user.shop_details.id);
-        setSelectedShopName(user.shop_.shopName);
+        setSelectedShopName(user.shop_details.shopName || user.shop?.shopName || 'My Shop');
       }
     };
-    
+
     loadShops();
   }, [isDirector, user]);
 
@@ -55,13 +55,13 @@ export default function StockScreen() {
   const loadStockItems = async () => {
     try {
       setIsLoading(true);
-      
+
       // Add shop filter for directors if a shop is selected
       const filters = {};
       if (selectedShopId) {
         filters.shop = selectedShopId;
       }
-      
+
       const response = await api.getStockItems(1, filters);
       setStockItems(response.results || []);
     } catch (error) {
@@ -187,7 +187,7 @@ export default function StockScreen() {
         {/* Action Buttons Container */}
         <View style={styles.actionButtonsContainer}>
           {/* View Logs Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.viewLogsButton}
             onPress={() => router.push('/stock/logs')}
           >
@@ -196,7 +196,7 @@ export default function StockScreen() {
           </TouchableOpacity>
 
           {/* Add Stock Log Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.addLogButton}
             onPress={() => router.push('/stock/add-log')}
           >
@@ -208,7 +208,7 @@ export default function StockScreen() {
 
       {/* Shop Selector - Only for Directors */}
       {isDirector && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.shopSelector}
           onPress={() => setShowShopModal(true)}
         >
@@ -291,9 +291,9 @@ export default function StockScreen() {
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            
+
             <FlatList
-              data={[{id: null, shopName: 'All Shops'}, ...shops]}
+              data={[{ id: null, shopName: 'All Shops' }, ...shops]}
               keyExtractor={(item) => item.id ? item.id.toString() : 'all'}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -313,7 +313,7 @@ export default function StockScreen() {
       </Modal>
 
       {/* Floating Add Button (Mobile UX) */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => router.push('/stock/add-log')}
       >

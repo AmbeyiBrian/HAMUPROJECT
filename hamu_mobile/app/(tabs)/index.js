@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
   Pressable
@@ -17,8 +17,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import local Colors instead of from constants directory
 import Colors from '../Colors';
 import api from '../../services/api';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
-export default function Dashboard() {
+function DashboardContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState({
@@ -35,31 +36,32 @@ export default function Dashboard() {
     setIsLoading(true);
     try {
       console.log('Loading dashboard data...');
-      
-      // First check if the token is available
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) {
-        console.log('No auth token found, redirecting to login');
-        router.replace('/login');
-        return;
-      }
-        // Get today's date as a string in YYYY-MM-DD format for filtering
+      // Get today's date as a string in YYYY-MM-DD format for filtering
       const today = new Date().toISOString().split('T')[0];
-      
-      // Load all necessary data with proper filtering
-      const [
-        stockResponse, 
-        customersResponse,
-        salesResponse,
-        refillsResponse
-      ] = await Promise.all([
+
+      // Load all necessary data with Promise.allSettled to handle partial failures
+      const results = await Promise.allSettled([
         api.getLowStockItems(),
         api.getCustomers(),
         api.getSales(1, { limit: 20 }),
         api.getRefills(1, { limit: 20 })
       ]);
-        
-      console.log('Successfully fetched all dashboard data');
+
+      // Extract results, using empty defaults for failed promises
+      const stockResponse = results[0].status === 'fulfilled' ? results[0].value : { results: [], count: 0 };
+      const customersResponse = results[1].status === 'fulfilled' ? results[1].value : { results: [], count: 0 };
+      const salesResponse = results[2].status === 'fulfilled' ? results[2].value : { results: [] };
+      const refillsResponse = results[3].status === 'fulfilled' ? results[3].value : { results: [] };
+
+      // Log any failed requests
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const names = ['stockItems', 'customers', 'sales', 'refills'];
+          console.warn(`[Dashboard] Failed to load ${names[index]}:`, result.reason?.message);
+        }
+      });
+
+      console.log('Successfully processed dashboard data');
 
       // Filter sales and refills to today's date in memory since API doesn't support date filtering
       const todayStart = new Date(today);
@@ -67,80 +69,54 @@ export default function Dashboard() {
       todayEnd.setHours(23, 59, 59, 999);
 
       // Filter sales to only include today's
-      const todaySales = salesResponse.results?.filter(sale => {
+      const todaySales = (salesResponse.results || []).filter(sale => {
         const saleDate = new Date(sale.sold_at);
         return saleDate >= todayStart && saleDate <= todayEnd;
-      }) || [];
-      
+      });
+
       // Filter refills to only include today's
-      const todayRefills = refillsResponse.results?.filter(refill => {
+      const todayRefills = (refillsResponse.results || []).filter(refill => {
         const refillDate = new Date(refill.created_at);
         return refillDate >= todayStart && refillDate <= todayEnd;
-      }) || [];
-      
-      // Process metrics
+      });
+
+      // Process metrics - use count if available, fallback to results.length for cached data
       setMetrics({
-        lowStockItems: stockResponse.count || 0,
+        lowStockItems: stockResponse.count ?? stockResponse.results?.length ?? 0,
         todaySales: todaySales.length,
         pendingRefills: todayRefills.length,
-        customers: customersResponse.count || 0
+        customers: customersResponse.count ?? customersResponse.results?.length ?? 0
       });
 
       // Prepare today's transactions - combine and sort sales and refills from today
       let todayTransactions = [];
-      
+
       // Add today's sales to transactions
       todayTransactions = todayTransactions.concat(
         todaySales.map(sale => ({ ...sale, type: 'sale', created_at: sale.created_at }))
       );
-      
+
       // Add today's refills to transactions
       todayTransactions = todayTransactions.concat(
         todayRefills.map(refill => ({ ...refill, type: 'refill', created_at: refill.created_at }))
       );
-      
+
       // Sort transactions by date (most recent first) and take the first 5
       todayTransactions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       setRecentTransactions(todayTransactions.slice(0, 5));
-        } catch (error) {
+    } catch (error) {
       console.error("Error loading dashboard data:", error);
-      // Check if this is an authentication error (401)
-      if (error.status === 401) {
-        console.log('Authentication error detected, redirecting to login');
-        router.replace('/login');
-      }
+      // 401 errors are handled by api.js which emits sessionExpired event
+      // No need to redirect here - AuthContext handles it
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   };
-  // Load data on component mount with a small delay to ensure auth is ready
+  // Load data on component mount
   useEffect(() => {
-    // Function to check token and then load data
-    const checkAndLoadData = async () => {
-      try {
-        // First check if token exists and is valid
-        const token = await AsyncStorage.getItem('authToken');
-        if (!token) {
-          console.log('No token found, redirecting to login...');
-          router.replace('/login');
-          return;
-        }
-        
-        // Set token in API explicitly to ensure it's available
-        await api.setAuthToken(token);
-        
-        // Small delay to ensure token is fully set
-        setTimeout(() => {
-          loadDashboardData();
-        }, 300);
-      } catch (err) {
-        console.error('Error in token check:', err);
-        router.replace('/login');
-      }
-    };
-    
-    checkAndLoadData();
+    // Simply load dashboard data - auth is handled by _layout.js
+    loadDashboardData();
   }, []);
 
   // Handle refresh
@@ -153,7 +129,7 @@ export default function Dashboard() {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleDateString('en-US', {
       day: 'numeric',
       month: 'short',
     });
@@ -167,7 +143,7 @@ export default function Dashboard() {
 
   // Render a quick action button
   const QuickAction = ({ title, icon, color, onPress }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.quickActionButton, { backgroundColor: color }]}
       onPress={onPress}
     >
@@ -191,42 +167,56 @@ export default function Dashboard() {
 
   // Component to display a transaction item
   const TransactionItem = ({ item }) => {
+    // Guard against null/undefined item
+    if (!item) return null;
+
     let iconName, color, title, subtitle, amount;
     let IconComponent = Ionicons;  // Use Ionicons for both icons
-    
+
+    // Safely format date - handle null/undefined
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'Pending';
+      try {
+        return new Date(dateStr).toLocaleDateString();
+      } catch {
+        return 'N/A';
+      }
+    };
+
     switch (item.type) {
       case 'sale':
         iconName = 'cart';
         color = Colors.primary;
         title = `Sale`;
-        subtitle = new Date(item.sold_at).toLocaleDateString();
-        amount = `KES ${item.cost}`;
+        subtitle = formatDate(item.sold_at || item.created_at);
+        amount = `KES ${item.cost || 0}`;
         break;
-        
+
       case 'refill':
         iconName = 'water';
         color = Colors.info;
         title = `Refill`;
-        subtitle = new Date(item.created_at).toLocaleDateString();
-        amount = `KES ${item.cost}`;
+        subtitle = formatDate(item.created_at);
+        amount = `KES ${item.cost || 0}`;
         break;
-        
+
       default:
-        iconName = 'file-text';
+        iconName = 'document-text';
         color = '#757575'; // grey
-        title = `Transaction #${item.id}`;
-        subtitle = new Date(item.created_at).toLocaleDateString();
+        title = `Transaction #${item.id || 'pending'}`;
+        subtitle = formatDate(item.created_at);
         amount = '';
     }
-    
+
     return (
-      <Pressable 
+      <Pressable
         style={styles.transactionItem}
         onPress={() => {
           // Handle transaction item press based on type
-          if (item.type === 'sale') {
+          // Only navigate if we have a valid numeric id (not offline id)
+          if (item.type === 'sale' && item.id && !String(item.id).startsWith('offline_')) {
             router.push(`/sales/${item.id}`);
-          } else if (item.type === 'refill') {
+          } else if (item.type === 'refill' && item.id && !String(item.id).startsWith('offline_')) {
             router.push(`/refills/${item.id}`);
           }
         }}
@@ -244,7 +234,7 @@ export default function Dashboard() {
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
@@ -259,7 +249,7 @@ export default function Dashboard() {
           {user?.shop?.shopName || 'Hamu Water'}
         </Text>
       </View>
-      
+
       {/* Metrics Section */}
       <View style={styles.metricsContainer}>
         <Text style={styles.sectionTitle}>Today's Overview</Text>
@@ -267,89 +257,89 @@ export default function Dashboard() {
           <ActivityIndicator size="large" color={Colors.primary} />
         ) : (
           <View style={styles.metricsGrid}>
-            <MetricCard 
-              title="Low Stock" 
-              value={metrics.lowStockItems} 
-              icon="warning" 
-              color={Colors.warning} 
+            <MetricCard
+              title="Low Stock"
+              value={metrics.lowStockItems}
+              icon="warning"
+              color={Colors.warning}
             />
-            <MetricCard 
-              title="Sales Today" 
-              value={metrics.todaySales} 
-              icon="cash" 
-              color={Colors.success} 
+            <MetricCard
+              title="Sales Today"
+              value={metrics.todaySales}
+              icon="cash"
+              color={Colors.success}
             />
-            <MetricCard 
-              title="Refills Today" 
-              value={metrics.pendingRefills} 
-              icon="hourglass" 
-              color={Colors.info} 
+            <MetricCard
+              title="Refills Today"
+              value={metrics.pendingRefills}
+              icon="hourglass"
+              color={Colors.info}
             />
-            <MetricCard 
-              title="Total Customers" 
-              value={metrics.customers} 
-              icon="people" 
-              color={Colors.primary} 
+            <MetricCard
+              title="Total Customers"
+              value={metrics.customers}
+              icon="people"
+              color={Colors.primary}
             />
           </View>
         )}
       </View>
-      
+
       {/* Quick Actions */}
       <View style={styles.quickActionsContainer}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActionsGrid}>
-          <QuickAction 
-            title="New Sale" 
-            icon="cart" 
+          <QuickAction
+            title="New Sale"
+            icon="cart"
             color={Colors.primary}
-            onPress={() => router.push('/sales/new')} 
+            onPress={() => router.push('/sales/new')}
           />
-          <QuickAction 
-            title="Add Stock" 
-            icon="add-circle" 
+          <QuickAction
+            title="Add Stock"
+            icon="add-circle"
             color={Colors.secondary}
-            onPress={() => router.push('/stock/add-log')} 
+            onPress={() => router.push('/stock/add-log')}
           />
-          <QuickAction 
-            title="New Refill" 
-            icon="water" 
+          <QuickAction
+            title="New Refill"
+            icon="water"
             color={Colors.info}
-            onPress={() => router.push('/refills/new')} 
+            onPress={() => router.push('/refills/new')}
           />
-          <QuickAction 
-            title="New Customer" 
-            icon="person-add" 
+          <QuickAction
+            title="New Customer"
+            icon="person-add"
             color={Colors.success}
-            onPress={() => router.push('/customers/new')} 
+            onPress={() => router.push('/customers/new')}
           />
-          <QuickAction 
-            title="New Expense" 
-            icon="cash-outline" 
+          <QuickAction
+            title="New Expense"
+            icon="cash-outline"
             color="#F57C00" // Orange color for expenses
-            onPress={() => router.push('/expenses/new')} 
+            onPress={() => router.push('/expenses/new')}
           />
-          <QuickAction 
-            title="Meter Reading" 
-            icon="speedometer" 
+          <QuickAction
+            title="Meter Reading"
+            icon="speedometer"
             color="#7B1FA2" // Purple color for meter readings
-            onPress={() => router.push('/meter_readings/new')} 
+            onPress={() => router.push('/meter_readings/new')}
           />
-          <QuickAction 
-            title="Bulk SMS" 
-            icon="chatbubbles" 
+          <QuickAction
+            title="Bulk SMS"
+            icon="chatbubbles"
             color="#9C27B0" // Purple color for SMS
-            onPress={() => router.push('/sms/bulk')} 
+            onPress={() => router.push('/sms/bulk')}
           />
-          <QuickAction 
-            title="SMS History" 
-            icon="time" 
+          <QuickAction
+            title="SMS History"
+            icon="time"
             color="#607D8B" // Blue gray color for history
-            onPress={() => router.push('/sms/history')} 
+            onPress={() => router.push('/sms/history')}
           />
         </View>
       </View>
-      
+
       {/* Recent Transactions */}
       <View style={styles.recentTransactionsContainer}>
         <View style={styles.sectionTitleRow}>
@@ -358,16 +348,16 @@ export default function Dashboard() {
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
-        
+
         {isLoading ? (
           <ActivityIndicator size="small" color={Colors.primary} />
         ) : (
           <View style={styles.transactionsList}>
             {recentTransactions.length > 0 ? (
               recentTransactions.map((transaction, index) => (
-                <TransactionItem 
+                <TransactionItem
                   key={`${transaction.type}-${transaction.id}-${index}`}
-                  item={transaction} 
+                  item={transaction}
                 />
               ))
             ) : (
@@ -379,6 +369,15 @@ export default function Dashboard() {
         )}
       </View>
     </ScrollView>
+  );
+}
+
+// Wrap Dashboard with ErrorBoundary to catch render errors
+export default function Dashboard() {
+  return (
+    <ErrorBoundary>
+      <DashboardContent />
+    </ErrorBoundary>
   );
 }
 

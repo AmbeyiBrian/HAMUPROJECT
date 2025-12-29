@@ -62,6 +62,7 @@ export default function NewRefillScreen() {
         setIsLoading(true);
 
         // Load customers, packages, and shops (for directors) in parallel
+        // Using Promise.allSettled to handle partial failures gracefully
         const promises = [
           api.getCustomers(),
           api.getPackages(1, { sale_type: 'REFILL' })
@@ -72,9 +73,19 @@ export default function NewRefillScreen() {
           promises.push(api.getShops());
         }
 
-        const responses = await Promise.all(promises);
-        const customersResponse = responses[0];
-        const packagesResponse = responses[1];
+        const results = await Promise.allSettled(promises);
+
+        // Extract results, using empty defaults for failed promises
+        const customersResponse = results[0].status === 'fulfilled' ? results[0].value : { results: [] };
+        const packagesResponse = results[1].status === 'fulfilled' ? results[1].value : { results: [] };
+
+        // Log any failed requests for debugging
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const names = ['customers', 'packages', 'shops'];
+            console.warn(`[NewRefill] Failed to load ${names[index]}:`, result.reason?.message);
+          }
+        });
 
         setCustomers(customersResponse.results || []);
         setFilteredCustomers(customersResponse.results || []);
@@ -252,14 +263,14 @@ export default function NewRefillScreen() {
       ...prev,
       customer: customer.id,
       customerName: customer.names,
-      shop: customer.shop_details.id,
-      freeRefillInterval: customer.shop_details.freeRefillInterval,
+      shop: customer.shop_details?.id || customer.shop,
+      freeRefillInterval: customer.shop_details?.freeRefillInterval || 0,
       agent_name: user.names
     }));
 
     // Filter packages to only show ones for this customer's shop
-    const customerShopId = customer.shop_details.id;
-    const shopPackages = packages.filter(pkg => pkg.shop_details.id === customerShopId);
+    const customerShopId = customer.shop_details?.id || customer.shop;
+    const shopPackages = packages.filter(pkg => (pkg.shop_details?.id || pkg.shop) === customerShopId);
     setFilteredPackages(shopPackages);
 
     // Reset package selection if previously selected package isn't available for this shop
@@ -280,11 +291,14 @@ export default function NewRefillScreen() {
     checkFreeRefillEligibility(customer.id, formData.package, formData.quantity);
   };
 
-  // Search customers
-  const searchCustomers = useCallback(
-    debounce(async (query) => {
+  // Search customers - using ref to avoid recreating debounce on every render
+  const searchCustomersRef = React.useRef(null);
+
+  // Initialize the debounced search function once
+  if (!searchCustomersRef.current) {
+    searchCustomersRef.current = debounce(async (query, customersList) => {
       if (!query.trim()) {
-        setFilteredCustomers(customers);
+        setFilteredCustomers(customersList);
         setIsSearching(false);
         return;
       }
@@ -296,17 +310,20 @@ export default function NewRefillScreen() {
       } catch (error) {
         console.error('Failed to search customers:', error);
         // Fallback to local filtering if API search fails
-        const filtered = customers.filter(customer =>
-          customer.names.toLowerCase().includes(query.toLowerCase()) ||
-          customer.phone_number.includes(query)
+        const filtered = customersList.filter(customer =>
+          customer.names?.toLowerCase().includes(query.toLowerCase()) ||
+          customer.phone_number?.includes(query)
         );
         setFilteredCustomers(filtered);
       } finally {
         setIsSearching(false);
       }
-    }, 300),
-    [customers]
-  );
+    }, 300);
+  }
+
+  const searchCustomers = (query) => {
+    searchCustomersRef.current(query, customers);
+  };
 
   // Handle customer search input change
   const handleCustomerSearchChange = (text) => {
@@ -498,12 +515,20 @@ export default function NewRefillScreen() {
       console.log("Submitting refill data:", refillData);
       const response = await api.createRefill(refillData);
 
-      // After successful submission
-      Alert.alert(
-        "Success",
-        "Refill recorded successfully",
-        [{ text: "OK", onPress: () => router.back() }]
-      );
+      // Check if the refill was queued for offline sync or actually synced
+      if (response._offlineQueued) {
+        Alert.alert(
+          "Saved Offline",
+          "Refill saved to your device. It will sync automatically when you have internet connection.",
+          [{ text: "OK", onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert(
+          "Success",
+          "Refill recorded successfully",
+          [{ text: "OK", onPress: () => router.back() }]
+        );
+      }
     } catch (error) {
       console.error("Error submitting refill:", error);
 

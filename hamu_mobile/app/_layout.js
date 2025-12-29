@@ -2,7 +2,7 @@ import { Slot, SplashScreen, usePathname, useRouter } from 'expo-router';
 import { ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { useEffect, createContext, useContext, useRef, useState, useMemo } from 'react';
-import { Text, View, ActivityIndicator, Button, Platform } from 'react-native';
+import { Text, View, ActivityIndicator, Button, Platform, LogBox } from 'react-native';
 import { PaperProvider, MD3LightTheme as DefaultTheme } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,8 +11,33 @@ import { AuthProvider, useAuth } from '../services/AuthContext';
 // Import offline services
 import { syncService } from '../services/SyncService';
 import { cacheService } from '../services/CacheService';
+import { networkService } from '../services/NetworkService';
 import api from '../services/api';
 import OfflineBanner from '../components/OfflineBanner';
+import NetworkBanner from '../components/NetworkBanner';
+
+// Global error handler - catches unhandled errors and logs them
+if (__DEV__) {
+  const originalHandler = ErrorUtils.getGlobalHandler();
+  ErrorUtils.setGlobalHandler((error, isFatal) => {
+    console.error('[GLOBAL_ERROR]', isFatal ? 'FATAL:' : 'ERROR:', error);
+    console.error('[GLOBAL_ERROR] Stack:', error?.stack);
+    if (originalHandler) {
+      originalHandler(error, isFatal);
+    }
+  });
+}
+
+// Handle unhandled promise rejections
+if (typeof global.HermesInternal !== 'undefined') {
+  // Hermes engine
+  global.HermesInternal?.enablePromiseRejectionTracker?.({
+    allRejections: true,
+    onUnhandled: (id, rejection) => {
+      console.error('[UNHANDLED_PROMISE]', id, rejection);
+    },
+  });
+}
 
 // Enhanced ocean blue theme
 const oceanBlueTheme = {
@@ -177,28 +202,11 @@ function RootLayoutNav() {
         barStyle="light-content"
       />
 
-      {/* Minimalist header - only showing logout button when authenticated */}
-      {!isLoginScreen && isAuthenticated && (
-        <View style={{
-          backgroundColor: oceanBlueTheme.colors.primary,
-          flexDirection: 'row',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          paddingTop: 35, // Account for status bar
-          paddingRight: 10,
-          paddingBottom: 5,
-          height: 45, // Minimal height
-        }}>
-          <Button
-            title="Logout"
-            onPress={logout}
-            color="#fff"
-          />
-        </View>
-      )}
+      {/* Network Connectivity Banner - shows when offline */}
+      {!!authUser && <NetworkBanner />}
 
-      {/* Offline Sync Banner */}
-      {isAuthenticated && <OfflineBanner />}
+      {/* Offline Sync Banner - shows pending items */}
+      {!!authUser && <OfflineBanner />}
 
       {/* Content area */}
       <View style={{ flex: 1 }}>
@@ -228,10 +236,15 @@ export default function RootLayout() {
     console.log('[RootLayout] Initializing offline services');
     syncService.initialize();
     cacheService.initialize();
+    networkService.initialize();
+    // Initialize offline queue - reset any stuck syncing items
+    const { offlineQueue } = require('../services/OfflineQueue');
+    offlineQueue.initialize();
 
     // Cleanup on unmount
     return () => {
       syncService.cleanup();
+      networkService.cleanup();
     };
   }, []);
 

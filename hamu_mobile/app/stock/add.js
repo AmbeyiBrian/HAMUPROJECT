@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
+import {
+  StyleSheet,
+  View,
+  Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
@@ -69,7 +69,7 @@ export default function AddStockScreen() {
     quantity: '0'
   });
   const [errors, setErrors] = useState({});
-  
+
   const { user } = useAuth();
   const router = useRouter();
 
@@ -87,7 +87,7 @@ export default function AddStockScreen() {
               shop: response.results[0].id
             }));
           }
-        } else {
+        } else if (user?.shop_details?.id) {
           // For shop agents, set their shop as default
           setFormData(prev => ({
             ...prev,
@@ -118,7 +118,7 @@ export default function AddStockScreen() {
         [name]: value
       }));
     }
-    
+
     // Clear error when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -131,25 +131,25 @@ export default function AddStockScreen() {
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.item_name) {
       newErrors.item_name = 'Item name is required';
     }
-    
+
     if (!formData.shop) {
       newErrors.shop = 'Shop is required';
     }
-    
+
     if (!formData.item_type) {
       newErrors.item_type = 'Item type is required';
     }
-    
+
     // Convert quantity to number for validation
     const quantity = parseInt(formData.quantity);
     if (isNaN(quantity) || quantity < 0) {
       newErrors.quantity = 'Please enter a valid quantity';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -159,10 +159,10 @@ export default function AddStockScreen() {
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setIsLoading(true);
-      
+
       // Create the stock item
       const stockItemData = {
         item_name: formData.item_name,
@@ -170,14 +170,14 @@ export default function AddStockScreen() {
         shop: formData.shop
         // Not including unit as the backend has a default value of 'piece'
       };
-      
+
       const stockItem = await api.fetch('stock-items/', {
         method: 'POST',
         body: JSON.stringify(stockItemData)
       });
-      
+
       // If a quantity is specified, create an initial stock log entry
-      if (parseInt(formData.quantity) > 0) {
+      if (parseInt(formData.quantity) > 0 && stockItem.id) {
         await api.createStockLog({
           stock_item: stockItem.id,
           quantity_change: parseInt(formData.quantity),
@@ -186,22 +186,38 @@ export default function AddStockScreen() {
           director_name: user.names
         });
       }
-      
+
       Alert.alert(
         'Success',
         `${formData.item_name} ${formData.item_type} added to inventory successfully.`,
         [
-          { 
-            text: 'OK', 
-            onPress: () => router.back() 
+          {
+            text: 'OK',
+            onPress: () => router.back()
           }
         ]
       );
     } catch (error) {
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to add item to inventory'
+      // Check if this is a network error (stock items can't be created offline)
+      const isNetworkError = !error.status && (
+        error.message === 'Network Error' ||
+        error.message?.includes('Network request failed') ||
+        error.message?.includes('fetch failed') ||
+        error.name === 'TypeError'
       );
+
+      if (isNetworkError) {
+        Alert.alert(
+          'Connection Required',
+          'Creating new stock items requires an internet connection. Please connect to the network and try again.\n\nNote: You can still update quantities for existing items while offline.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          error.message || 'Failed to add item to inventory'
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -218,7 +234,7 @@ export default function AddStockScreen() {
           <Text style={styles.headerTitle}>Add New Stock Item</Text>
           <Text style={styles.headerSubtitle}>Enter details for new inventory item</Text>
         </View>
-        
+
         <View style={styles.formContainer}>
           {/* Item Name */}
           <View style={styles.inputGroup}>
@@ -236,7 +252,7 @@ export default function AddStockScreen() {
             </View>
             {errors.item_name && <Text style={styles.errorText}>{errors.item_name}</Text>}
           </View>
-          
+
           {/* Item Type - now dependent on selected item_name */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Item Type *</Text>
@@ -253,7 +269,7 @@ export default function AddStockScreen() {
             </View>
             {errors.item_type && <Text style={styles.errorText}>{errors.item_type}</Text>}
           </View>
-          
+
           {/* Shop (only for directors) */}
           {user.user_class === 'Director' && (
             <View style={styles.inputGroup}>
@@ -269,7 +285,7 @@ export default function AddStockScreen() {
                     <Picker.Item label="Loading shops..." value={null} />
                   ) : (
                     shops.map(shop => (
-                      <Picker.Item key={shop_details.id} label={shop.shopName} value={shop_details.id} />
+                      <Picker.Item key={shop.id} label={shop.shopName} value={shop.id} />
                     ))
                   )}
                 </Picker>
@@ -277,7 +293,7 @@ export default function AddStockScreen() {
               {errors.shop && <Text style={styles.errorText}>{errors.shop}</Text>}
             </View>
           )}
-          
+
           {/* Initial Quantity */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Initial Quantity</Text>

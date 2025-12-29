@@ -32,6 +32,15 @@ class RefillViewSet(viewsets.ModelViewSet):
             # Agents only see refills from their shop
             return Refills.objects.filter(shop=user.shop).select_related('shop', 'customer', 'package')
     
+    def create(self, request, *args, **kwargs):
+        """Override create to log validation errors for debugging sync issues"""
+        print(f"[RefillViewSet] Received POST data: {request.data}")
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print(f"[RefillViewSet] VALIDATION ERRORS: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return super().create(request, *args, **kwargs)
+    
     def perform_create(self, serializer):
         """Automatically set shop and agent_name for agent users"""
         user = self.request.user

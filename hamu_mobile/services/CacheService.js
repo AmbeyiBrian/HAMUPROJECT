@@ -18,23 +18,26 @@ const CACHE_KEYS = {
     EXPENSES: '@hamu_cache_expenses',
     METER_READINGS: '@hamu_cache_meter_readings',
     CREDITS: '@hamu_cache_credits',
+    SMS_HISTORY: '@hamu_cache_sms_history',
     DASHBOARD_STATS: '@hamu_cache_dashboard',
     CACHE_TIMESTAMPS: '@hamu_cache_timestamps',
 };
 
 // Cache expiry times (in milliseconds)
+// Extended for 1-week+ offline support
 const CACHE_EXPIRY = {
-    USER_PROFILE: 7 * 24 * 60 * 60 * 1000, // 7 days
-    CUSTOMERS: 24 * 60 * 60 * 1000, // 24 hours
-    PACKAGES: 7 * 24 * 60 * 60 * 1000, // 7 days (rarely change)
-    SHOPS: 7 * 24 * 60 * 60 * 1000, // 7 days (rarely change)
-    STOCK_ITEMS: 24 * 60 * 60 * 1000, // 24 hours
-    SALES: 1 * 60 * 60 * 1000, // 1 hour (transaction data changes frequently)
-    REFILLS: 1 * 60 * 60 * 1000, // 1 hour
-    EXPENSES: 1 * 60 * 60 * 1000, // 1 hour
-    METER_READINGS: 1 * 60 * 60 * 1000, // 1 hour
-    CREDITS: 1 * 60 * 60 * 1000, // 1 hour
-    DASHBOARD_STATS: 30 * 60 * 1000, // 30 minutes
+    USER_PROFILE: 14 * 24 * 60 * 60 * 1000, // 14 days (for long offline periods)
+    CUSTOMERS: 14 * 24 * 60 * 60 * 1000, // 14 days (essential for transactions)
+    PACKAGES: 14 * 24 * 60 * 60 * 1000, // 14 days (rarely change)
+    SHOPS: 14 * 24 * 60 * 60 * 1000, // 14 days (rarely change)
+    STOCK_ITEMS: 7 * 24 * 60 * 60 * 1000, // 7 days
+    SALES: 7 * 24 * 60 * 60 * 1000, // 7 days (for offline viewing)
+    REFILLS: 7 * 24 * 60 * 60 * 1000, // 7 days
+    EXPENSES: 7 * 24 * 60 * 60 * 1000, // 7 days
+    METER_READINGS: 7 * 24 * 60 * 60 * 1000, // 7 days
+    CREDITS: 7 * 24 * 60 * 60 * 1000, // 7 days
+    SMS_HISTORY: 7 * 24 * 60 * 60 * 1000, // 7 days
+    DASHBOARD_STATS: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
 class CacheServiceClass {
@@ -224,6 +227,16 @@ class CacheServiceClass {
         return await this.getCache(key);
     }
 
+    // ========== SMS History ==========
+    async cacheSMSHistory(messages) {
+        await this.setCache(CACHE_KEYS.SMS_HISTORY, messages);
+        console.log(`[CacheService] SMS history cached: ${messages.length} items`);
+    }
+
+    async getCachedSMSHistory() {
+        return await this.getCache(CACHE_KEYS.SMS_HISTORY);
+    }
+
     // ========== Dashboard Stats ==========
     async cacheDashboardStats(stats) {
         await this.setCache(CACHE_KEYS.DASHBOARD_STATS, stats);
@@ -274,6 +287,113 @@ class CacheServiceClass {
      */
     isUsingCachedData(key) {
         return this.isCacheValid(key);
+    }
+
+    // ========== Optimistic Updates ==========
+    /**
+     * Update a cached customer after an offline refill
+     * @param {number} customerId - Customer ID
+     * @param {Object} refillData - Refill data including cost, payment_mode
+     */
+    async updateCustomerAfterRefill(customerId, refillData) {
+        try {
+            const customers = await this.getCachedCustomers(null);
+            if (!customers) return;
+
+            const customerIndex = customers.findIndex(c => c.id === parseInt(customerId, 10));
+            if (customerIndex === -1) return;
+
+            const customer = customers[customerIndex];
+
+            // Update refill count
+            customer.refill_count = (customer.refill_count || 0) + 1;
+
+            // Update last refill date
+            customer.last_refill_date = new Date().toISOString();
+
+            // Update loyalty points
+            if (customer.loyalty) {
+                const interval = customer.shop_details?.freeRefillInterval || 10;
+                customer.loyalty.current_points = (customer.loyalty.current_points + 1) % interval;
+                customer.loyalty.refills_until_free = interval - customer.loyalty.current_points;
+                if (customer.loyalty.current_points === 0 && refillData.payment_mode !== 'FREE') {
+                    customer.loyalty.refills_until_free = interval;
+                }
+            }
+
+            customers[customerIndex] = customer;
+            await this.cacheCustomers(customers, null);
+            console.log(`[CacheService] Updated customer ${customerId} after offline refill`);
+        } catch (error) {
+            console.error('[CacheService] Failed to update customer after refill:', error);
+        }
+    }
+
+    /**
+     * Update a cached customer after an offline credit payment
+     * @param {number} customerId - Customer ID
+     * @param {Object} creditData - Credit payment data
+     */
+    async updateCustomerAfterCredit(customerId, creditData) {
+        try {
+            // Add the credit to cached credits list
+            const credits = await this.getCachedCredits(null) || [];
+            const newCredit = {
+                ...creditData,
+                id: `offline_${Date.now()}`,
+                customer: parseInt(customerId, 10),
+                created_at: new Date().toISOString(),
+                _offlineQueued: true
+            };
+            credits.unshift(newCredit);
+            await this.cacheCredits(credits, null);
+            console.log(`[CacheService] Added offline credit for customer ${customerId}`);
+        } catch (error) {
+            console.error('[CacheService] Failed to update after credit:', error);
+        }
+    }
+
+    /**
+     * Add an offline refill to the cached refills list
+     * @param {Object} refillData - Refill data
+     */
+    async addOfflineRefillToCache(refillData) {
+        try {
+            const refills = await this.getCachedRefills(null) || [];
+            const newRefill = {
+                ...refillData,
+                id: `offline_${Date.now()}`,
+                created_at: new Date().toISOString(),
+                _offlineQueued: true
+            };
+            refills.unshift(newRefill);
+            await this.cacheRefills(refills, null);
+            console.log('[CacheService] Added offline refill to cache');
+        } catch (error) {
+            console.error('[CacheService] Failed to add offline refill:', error);
+        }
+    }
+
+    /**
+     * Add an offline sale to the cached sales list
+     * @param {Object} saleData - Sale data
+     */
+    async addOfflineSaleToCache(saleData) {
+        try {
+            const sales = await this.getCachedSales(null) || [];
+            const newSale = {
+                ...saleData,
+                id: `offline_${Date.now()}`,
+                sold_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                _offlineQueued: true
+            };
+            sales.unshift(newSale);
+            await this.cacheSales(sales, null);
+            console.log('[CacheService] Added offline sale to cache');
+        } catch (error) {
+            console.error('[CacheService] Failed to add offline sale:', error);
+        }
     }
 }
 

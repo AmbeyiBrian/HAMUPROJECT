@@ -65,6 +65,7 @@ const OfflineBanner = () => {
 
     const loadPendingCount = async () => {
         const count = await offlineQueue.getPendingCount();
+        console.log('[OfflineBanner] Pending count:', count);
         setPendingCount(count);
     };
 
@@ -78,17 +79,14 @@ const OfflineBanner = () => {
         router.push('/(tabs)/sync-queue');
     };
 
-    if (!isVisible && pendingCount === 0) {
+    console.log('[OfflineBanner] Rendering with pendingCount:', pendingCount);
+
+    if (pendingCount === 0) {
         return null;
     }
 
     return (
-        <Animated.View
-            style={[
-                styles.container,
-                { transform: [{ translateY: slideAnim }] },
-            ]}
-        >
+        <View style={styles.container}>
             <TouchableOpacity onPress={handleViewQueue} style={styles.content}>
                 <MaterialCommunityIcons
                     name={isSyncing ? 'cloud-sync' : 'cloud-upload-outline'}
@@ -98,7 +96,7 @@ const OfflineBanner = () => {
                 <Text style={styles.text}>
                     {isSyncing
                         ? 'Syncing...'
-                        : `${pendingCount} transaction${pendingCount !== 1 ? 's' : ''} pending sync`}
+                        : `${pendingCount} pending`}
                 </Text>
             </TouchableOpacity>
             {!isSyncing && (
@@ -106,18 +104,20 @@ const OfflineBanner = () => {
                     <Text style={styles.syncButtonText}>Sync Now</Text>
                 </TouchableOpacity>
             )}
-        </Animated.View>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         backgroundColor: '#F59E0B', // Amber warning color
-        paddingVertical: 8,
+        paddingVertical: 12,
         paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        minHeight: 48,
+        zIndex: 100,
     },
     content: {
         flexDirection: 'row',

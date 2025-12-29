@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -71,7 +71,7 @@ export default function NewCreditScreen() {
           setFormData(prev => ({
             ...prev,
             customer: customerData.id,
-            shop: customerData.shop_details.id
+            shop: customerData.shop_details?.id || customerData.shop
           }));
         }
 
@@ -109,7 +109,7 @@ export default function NewCreditScreen() {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -122,7 +122,7 @@ export default function NewCreditScreen() {
   // Search for customers
   const searchCustomers = async (query) => {
     if (!query.trim()) return;
-    
+
     try {
       setIsSearching(true);
       const response = await api.getCustomers(1, { search: query });
@@ -135,13 +135,16 @@ export default function NewCreditScreen() {
     }
   };
 
-  // Debounced search function to prevent too many API calls
-  const debouncedSearchCustomers = useCallback(
+  // Debounced search function - using ref to avoid recreation
+  const debouncedSearchRef = React.useRef(
     debounce((query) => {
       searchCustomers(query);
-    }, 300),
-    []
+    }, 300)
   );
+
+  const debouncedSearchCustomers = (query) => {
+    debouncedSearchRef.current(query);
+  };
 
   // Select a customer from search results
   const selectCustomer = (customer) => {
@@ -149,10 +152,10 @@ export default function NewCreditScreen() {
     setFormData(prev => ({
       ...prev,
       customer: customer.id,
-      shop: customer.shop_details.id
+      shop: customer.shop_details?.id || customer.shop
     }));
     setShowCustomerModal(false);
-    
+
     // Clear error for customer if it exists
     if (errors.customer) {
       setErrors(prev => ({
@@ -165,25 +168,25 @@ export default function NewCreditScreen() {
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.customer) {
       newErrors.customer = 'Please select a customer';
     }
-    
+
     if (!formData.shop) {
       newErrors.shop = 'Shop is required';
     }
-    
+
     // Validate money_paid is a positive number
     const amount = parseFloat(formData.money_paid);
     if (isNaN(amount) || amount <= 0) {
       newErrors.money_paid = 'Please enter a valid amount';
     }
-    
+
     if (!formData.payment_mode) {
       newErrors.payment_mode = 'Please select payment method';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -194,7 +197,7 @@ export default function NewCreditScreen() {
       Alert.alert('Error', 'Please complete all required fields');
       return;
     }
-    
+
     setIsSubmitting(true);
 
     try {
@@ -229,7 +232,7 @@ export default function NewCreditScreen() {
       console.error('Failed to record credit payment:', error);
       // Show the specific error message from the API if available
       let errorMsg = 'Failed to record credit payment. Please try again.';
-      
+
       if (error.response) {
         try {
           const errorData = await error.response.json();
@@ -240,7 +243,7 @@ export default function NewCreditScreen() {
       } else if (error.message) {
         errorMsg = error.message;
       }
-      
+
       Alert.alert('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
@@ -294,8 +297,8 @@ export default function NewCreditScreen() {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Customer <Text style={styles.required}>*</Text></Text>
             {selectedCustomer ? (
-              <TouchableOpacity 
-                style={styles.customerSelector} 
+              <TouchableOpacity
+                style={styles.customerSelector}
                 onPress={() => setShowCustomerModal(true)}
               >
                 <View>
@@ -305,8 +308,8 @@ export default function NewCreditScreen() {
                 <Ionicons name="chevron-down" size={20} color={Colors.lightText} />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity 
-                style={styles.customerSelector} 
+              <TouchableOpacity
+                style={styles.customerSelector}
                 onPress={() => setShowCustomerModal(true)}
               >
                 <Text style={styles.placeholderText}>Select a customer</Text>
@@ -408,11 +411,11 @@ export default function NewCreditScreen() {
                 autoFocus
               />
               {searchQuery ? (
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => {
                     setSearchQuery('');
                     searchCustomers('a'); // Reset to default search
-                  }} 
+                  }}
                   style={styles.clearButton}
                 >
                   <Ionicons name="close-circle" size={20} color={Colors.lightText} />
@@ -431,7 +434,7 @@ export default function NewCreditScreen() {
               data={searchResults}
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.customerItem}
                   onPress={() => selectCustomer(item)}
                 >

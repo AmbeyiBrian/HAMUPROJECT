@@ -29,7 +29,8 @@ class RefillSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'customer': {'write_only': True},
             'shop': {'write_only': True},
-            'package': {'write_only': True}
+            'package': {'write_only': True},
+            'created_at': {'required': False},  # Optional - defaults to now()
         }
     
     def get_is_next_refill_free(self, obj):
@@ -133,10 +134,19 @@ class RefillSerializer(serializers.ModelSerializer):
         agent_name = validated_data.get('agent_name', 'System')
         quantity = validated_data.get('quantity', 1)
         
-        # If this is an offline transaction (has client_id), recalculate loyalty
-        # This ensures customers get their free refills even when created offline
+        # Set created_at to now() if not provided
+        from django.utils import timezone
+        if 'created_at' not in validated_data or validated_data['created_at'] is None:
+            validated_data['created_at'] = timezone.now()
+        
+        # If this is an offline transaction (has client_id), check if customer was eligible for free refills
+        # but was charged full price. If so, create a credit record for the overpayment.
+        # IMPORTANT: We do NOT recalculate the cost - customer already paid at POS.
+        # Instead, we track what should have been free and create a credit for their next visit.
+        offline_credit_amount = 0
         if client_id and customer and package and shop:
             free_refill_interval = shop.freeRefillInterval
+            original_cost = validated_data.get('cost', 0)
             
             if free_refill_interval > 0:
                 # Get total refill quantity for this customer and package BEFORE this transaction
@@ -155,18 +165,24 @@ class RefillSerializer(serializers.ModelSerializer):
                 free_quantity = min(thresholds_after - thresholds_before, quantity)
                 paid_quantity = quantity - free_quantity
                 
-                # Recalculate cost based on paid quantity only
-                cost = package.price * paid_quantity
+                # Calculate what the cost SHOULD have been
+                correct_cost = package.price * paid_quantity
                 
-                # Update validated_data with recalculated values
+                # If customer overpaid, calculate the credit amount
+                if original_cost > correct_cost:
+                    offline_credit_amount = float(original_cost - correct_cost)
+                
+                # Update validated_data with loyalty info (but keep original cost!)
                 validated_data['free_quantity'] = free_quantity
                 validated_data['paid_quantity'] = paid_quantity
                 validated_data['loyalty_refill_count'] = paid_quantity  # Only paid count toward loyalty
-                validated_data['cost'] = cost
+                # Mark as partially free if applicable (for display purposes)
                 validated_data['is_free'] = free_quantity > 0 and paid_quantity == 0
                 validated_data['is_partially_free'] = free_quantity > 0 and paid_quantity > 0
+                # NOTE: We intentionally do NOT update 'cost' - customer already paid this amount
                 
-                print(f"[Offline Sync] Recalculated loyalty - Free: {free_quantity}, Paid: {paid_quantity}, Cost: {cost}")
+                if offline_credit_amount > 0:
+                    print(f"[Offline Sync] Customer overpaid by {offline_credit_amount}. Creating credit balance.")
         
         # Create the refill record with (possibly recalculated) data
         refill = super().create(validated_data)
@@ -179,8 +195,52 @@ class RefillSerializer(serializers.ModelSerializer):
             # This allows the business to continue even if stock tracking has issues
             print(f"Inventory deduction warning: {str(e)}")
         
-        # Only send notifications after creating the refill
-        if customer:
+        # If this was an offline-synced refill and customer overpaid, create a credit record
+        if offline_credit_amount > 0 and customer:
+            from credits.models import Credits
+            from decimal import Decimal
+            from django.utils import timezone
+            
+            # Create credit record with positive money_paid
+            # This represents the customer's overpayment which reduces their outstanding credit
+            # If outstanding goes negative, customer has credit balance for future purchases
+            # Note: agent_name is varchar(20), so keep it short
+            Credits.objects.create(
+                customer=customer,
+                shop=shop,
+                money_paid=Decimal(str(offline_credit_amount)),  # Positive = reduces outstanding
+                payment_mode='CASH',  # Original payment was made at POS
+                payment_date=timezone.now(),
+                agent_name='OfflineSync'  # Short name to fit varchar(20)
+            )
+            print(f"[Offline Sync] Created credit payment of {offline_credit_amount} for customer {customer.id}")
+        
+        # Handle credit_applied from mobile app
+        # When customer uses their credit balance, we need to deduct it
+        credit_applied = self.initial_data.get('credit_applied', 0)
+        if credit_applied and float(credit_applied) > 0 and customer:
+            from credits.models import Credits
+            from decimal import Decimal
+            from django.utils import timezone
+            
+            # Create a refill with CREDIT payment mode to consume the credit balance
+            # This increases the customer's "total_credit_owed" which offsets their "total_repaid"
+            Credits.objects.create(
+                customer=customer,
+                shop=shop,
+                money_paid=Decimal(str(-float(credit_applied))),  # Negative = deducts from balance
+                payment_mode='CASH',  # Was applied as payment for this refill
+                payment_date=timezone.now(),
+                agent_name='CreditUsed'  # Short name to fit varchar(20)
+            )
+            print(f"[Refill] Customer {customer.id} used credit balance of {credit_applied}")
+        
+        # Only send notifications for ONLINE transactions (not offline-synced ones)
+        # Offline-synced transactions (with client_id) should not trigger SMS because:
+        # 1. The transaction happened in the past
+        # 2. Customer already left the shop
+        # 3. Sending "free refill" SMS when they paid full price would be confusing
+        if customer and not client_id:
             # Send SMS notification if this was a free/partially free refill
             if refill.free_quantity > 0:
                 # Use the new function that includes free quantity information

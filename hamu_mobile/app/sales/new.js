@@ -55,6 +55,7 @@ export default function NewSaleScreen() {
       try {
         setIsLoading(true);
 
+        // Using Promise.allSettled to handle partial failures gracefully
         const promises = [
           api.getCustomers(),
           api.getPackages(1, { sale_type: 'SALE' })
@@ -64,10 +65,19 @@ export default function NewSaleScreen() {
           promises.push(api.getShops());  // Use getShops for caching
         }
 
-        const responses = await Promise.all(promises);
+        const results = await Promise.allSettled(promises);
 
-        const customersResponse = responses[0];
-        const packagesResponse = responses[1];
+        // Extract results, using empty defaults for failed promises
+        const customersResponse = results[0].status === 'fulfilled' ? results[0].value : { results: [] };
+        const packagesResponse = results[1].status === 'fulfilled' ? results[1].value : { results: [] };
+
+        // Log any failed requests for debugging
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const names = ['customers', 'packages', 'shops'];
+            console.warn(`[NewSale] Failed to load ${names[index]}:`, result.reason?.message);
+          }
+        });
 
         setCustomers(customersResponse.results || []);
         setFilteredCustomers(customersResponse.results || []);
@@ -75,9 +85,9 @@ export default function NewSaleScreen() {
         const salePackages = packagesResponse.results || [];
         setPackages(salePackages);
 
-        if (user.user_class === 'Director' && responses[2]) {
-          setShops(responses[2].results || []);
-        } else if (user.shop_details) {
+        if (user.user_class === 'Director' && results[2] && results[2].status === 'fulfilled') {
+          setShops(results[2].value?.results || []);
+        } else if (user?.shop_details?.id) {
           // For agents, filter packages for their assigned shop
           const shopPackages = salePackages.filter(pkg => pkg.shop === user.shop_details.id);
 
@@ -134,7 +144,7 @@ export default function NewSaleScreen() {
     }
 
     if (name === 'shop' && value) {
-      const shopPackages = packages.filter(pkg => pkg.shop_details.id === value);
+      const shopPackages = packages.filter(pkg => (pkg.shop_details?.id || pkg.shop) === value);
       setFilteredPackages(shopPackages);
 
       if (formData.package) {
@@ -162,11 +172,11 @@ export default function NewSaleScreen() {
       ...prev,
       customer: customer.id,
       customerName: customer.names,
-      shop: customer.shop_details.id
+      shop: customer.shop_details?.id || customer.shop
     }));
 
-    const customerShopId = customer.shop_details.id;
-    const shopPackages = packages.filter(pkg => pkg.shop_details.id === customerShopId);
+    const customerShopId = customer.shop_details?.id || customer.shop;
+    const shopPackages = packages.filter(pkg => (pkg.shop_details?.id || pkg.shop) === customerShopId);
     setFilteredPackages(shopPackages);
 
     if (formData.package) {
@@ -183,10 +193,13 @@ export default function NewSaleScreen() {
     setShowCustomerModal(false);
   };
 
-  const searchCustomers = useCallback(
-    debounce(async (query) => {
+  // Search customers - using ref to avoid recreating debounce on every render
+  const searchCustomersRef = React.useRef(null);
+
+  if (!searchCustomersRef.current) {
+    searchCustomersRef.current = debounce(async (query, customersList) => {
       if (!query.trim()) {
-        setFilteredCustomers(customers);
+        setFilteredCustomers(customersList);
         setIsSearching(false);
         return;
       }
@@ -196,17 +209,20 @@ export default function NewSaleScreen() {
         setFilteredCustomers(response.results || []);
       } catch (error) {
         console.error('Failed to search customers:', error);
-        const filtered = customers.filter(customer =>
-          customer.names.toLowerCase().includes(query.toLowerCase()) ||
-          customer.phone_number.includes(query)
+        const filtered = customersList.filter(customer =>
+          customer.names?.toLowerCase().includes(query.toLowerCase()) ||
+          customer.phone_number?.includes(query)
         );
         setFilteredCustomers(filtered);
       } finally {
         setIsSearching(false);
       }
-    }, 300),
-    [customers]
-  );
+    }, 300);
+  }
+
+  const searchCustomers = (query) => {
+    searchCustomersRef.current(query, customers);
+  };
 
   const handleCustomerSearchChange = (text) => {
     setCustomerSearchQuery(text);
@@ -259,13 +275,22 @@ export default function NewSaleScreen() {
 
       console.log('Submitting sale data:', saleData);
 
-      await api.createSale(saleData);
+      const response = await api.createSale(saleData);
 
-      Alert.alert(
-        'Success',
-        'Sale recorded successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      // Check if the sale was queued for offline sync or actually synced
+      if (response._offlineQueued) {
+        Alert.alert(
+          'Saved Offline',
+          'Sale saved to your device. It will sync automatically when you have internet connection.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert(
+          'Success',
+          'Sale recorded successfully',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
     } catch (error) {
       console.error('Failed to record sale:', error);
 
@@ -287,7 +312,8 @@ export default function NewSaleScreen() {
   };
 
   const formatCurrency = (amount) => {
-    return `KSH ${parseFloat(amount).toFixed(2)}`;
+    return `KSH ${parseFloat(amount).toFixed(2)
+      }`;
   };
 
   if (isLoading) {
@@ -362,7 +388,7 @@ export default function NewSaleScreen() {
                 {filteredPackages.map(pkg => (
                   <Picker.Item
                     key={pkg.id}
-                    label={`${pkg.description} ${pkg.bottle_type ? `(${pkg.bottle_type})` : ''} - ${formatCurrency(pkg.price)}`}
+                    label={`${pkg.description} ${pkg.bottle_type ? `(${pkg.bottle_type})` : ''} - ${formatCurrency(pkg.price)} `}
                     value={pkg.id}
                   />
                 ))}
@@ -511,7 +537,7 @@ export default function NewSaleScreen() {
             <TouchableOpacity
               style={styles.walkInButton}
               onPress={() => {
-                const shopId = user.user_class === 'Director' ? null : user.shop_details.id;
+                const shopId = user.user_class === 'Director' ? null : (user.shop_details?.id || user.shop?.id);
 
                 setFormData(prev => ({
                   ...prev,
@@ -520,7 +546,7 @@ export default function NewSaleScreen() {
                   shop: shopId
                 }));
 
-                if (user.shop_details) {
+                if (user.shop_details?.id) {
                   const shopPackages = packages.filter(pkg => pkg.shop === user.shop_details.id);
                   setFilteredPackages(shopPackages);
                 }

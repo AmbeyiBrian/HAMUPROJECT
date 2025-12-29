@@ -55,8 +55,9 @@ class Sales(models.Model):
 
     def __str__(self):
         cust_name = self.customer.names if self.customer else "Anonymous"
-        # Removed redundant waterAmount, rely on package FK
-        return f"{cust_name} - {self.quantity} x {self.package.water_amount_label} Sale on {self.sold_at.strftime('%Y-%m-%d %H:%M')}"
+        # Handle None sold_at value
+        date_str = self.sold_at.strftime('%Y-%m-%d %H:%M') if self.sold_at else "No date"
+        return f"{cust_name} - {self.quantity} x {self.package.water_amount_label} Sale on {date_str}"
 
     class Meta:
         verbose_name_plural = 'Sales'

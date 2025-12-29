@@ -42,20 +42,65 @@ class CustomerViewSet(viewsets.ModelViewSet):
     def export_for_offline(self, request):
         """
         Export all customers for offline caching.
-        Returns minimal fields without pagination for efficient mobile caching.
+        Returns fields needed for offline customer detail pages.
         """
         queryset = self.get_queryset()
         
-        # Return minimal fields for offline use
         customers = []
-        for customer in queryset.select_related('shop'):
+        for customer in queryset.select_related('shop').prefetch_related('refills', 'sales', 'credit_payments'):
+            # Calculate loyalty info
+            refills = customer.refills.all()
+            refill_count = refills.count()
+            free_refill_interval = getattr(customer.shop, 'freeRefillInterval', 10) if customer.shop else 10
+            refill_quantities = sum(getattr(r, 'quantity', 1) or 1 for r in refills)
+            free_refills = refills.filter(is_free=True).count()
+            calculated_free = refill_quantities // free_refill_interval
+            free_refills_redeemed = max(free_refills, calculated_free)
+            paid_quantities = refill_quantities - free_refills_redeemed
+            current_points = paid_quantities % free_refill_interval
+            refills_until_free = free_refill_interval - current_points if current_points > 0 else free_refill_interval
+            
+            # Get last refill date
+            last_refill = refills.order_by('-created_at').first()
+            last_refill_date = last_refill.created_at.isoformat() if last_refill else None
+            
+            # Calculate credit balance
+            # total_credit_owed = sum of CREDIT payment mode refills and sales
+            total_credit_owed = 0
+            credit_refills = refills.filter(payment_mode='CREDIT')
+            for r in credit_refills:
+                total_credit_owed += float(r.cost or 0)
+            if hasattr(customer, 'sales'):
+                credit_sales = customer.sales.filter(payment_mode='CREDIT')
+                for s in credit_sales:
+                    total_credit_owed += float(s.cost or 0)
+            
+            # total_repaid = sum of credit_payments
+            total_repaid = 0
+            if hasattr(customer, 'credit_payments'):
+                for payment in customer.credit_payments.all():
+                    total_repaid += float(payment.money_paid or 0)
+            
+            # credit_balance = positive means customer has balance to use
+            # (if repaid more than owed, or received loyalty/refund credits)
+            credit_balance = total_repaid - total_credit_owed
+            
             customers.append({
                 'id': customer.id,
                 'names': customer.names,
                 'phone_number': customer.phone_number,
                 'apartment_name': customer.apartment_name,
                 'room_number': customer.room_number,
+                'date_registered': customer.date_registered.isoformat() if customer.date_registered else None,
+                'last_refill_date': last_refill_date,
                 'shop': customer.shop_id,
+                'refill_count': refill_count,
+                'credit_balance': credit_balance,  # Positive = customer has balance to use
+                'loyalty': {
+                    'current_points': current_points,
+                    'refills_until_free': refills_until_free,
+                    'free_refills_redeemed': free_refills_redeemed
+                },
                 'shop_details': {
                     'id': customer.shop.id,
                     'shopName': customer.shop.shopName,

@@ -32,6 +32,30 @@ class OfflineQueueService {
     }
 
     /**
+     * Initialize the queue service - reset any stuck 'syncing' items
+     * Call this on app startup
+     */
+    async initialize() {
+        const queue = await this.getQueue();
+        let resetCount = 0;
+
+        const updatedQueue = queue.map(item => {
+            if (item.status === 'syncing') {
+                resetCount++;
+                return { ...item, status: 'pending' };
+            }
+            return item;
+        });
+
+        if (resetCount > 0) {
+            await this.saveQueue(updatedQueue);
+            console.log(`[OfflineQueue] Reset ${resetCount} stuck syncing items to pending`);
+        }
+
+        console.log(`[OfflineQueue] Initialized with ${queue.length} items`);
+    }
+
+    /**
      * Generate a UUID v4 for client_id
      */
     async generateClientId() {
@@ -83,15 +107,34 @@ class OfflineQueueService {
         // Generate client_id if not already present
         const clientId = data.client_id || await this.generateClientId();
 
+        // Capture current timestamp for the transaction - important for analytics
+        const timestamp = new Date().toISOString();
+
+        // Add timestamp field based on transaction type
+        const dataWithTimestamp = { ...data, client_id: clientId };
+        if (type === 'refill' && !data.created_at) {
+            dataWithTimestamp.created_at = timestamp;
+        } else if (type === 'stock_log' && !data.log_date) {
+            dataWithTimestamp.log_date = timestamp;
+        } else if (type === 'sale' && !data.sold_at) {
+            dataWithTimestamp.sold_at = timestamp;
+        } else if (type === 'expense' && !data.date) {
+            dataWithTimestamp.date = timestamp;
+        } else if (type === 'credit' && !data.created_at) {
+            dataWithTimestamp.created_at = timestamp;
+        } else if (type === 'meter_reading' && !data.reading_date) {
+            dataWithTimestamp.reading_date = timestamp;
+        }
+
         const queueItem = {
             id: clientId,
             type,
             endpoint,
             method,
-            data: { ...data, client_id: clientId },
+            data: dataWithTimestamp,
             status: 'pending',
             retryCount: 0,
-            createdAt: new Date().toISOString(),
+            createdAt: timestamp,
             lastAttempt: null,
             errorMessage: null,
         };
@@ -99,7 +142,7 @@ class OfflineQueueService {
         queue.push(queueItem);
         await this.saveQueue(queue);
 
-        console.log(`[OfflineQueue] Added ${type} to queue with client_id: ${clientId}`);
+        console.log(`[OfflineQueue] Added ${type} to queue with client_id: ${clientId}, timestamp: ${timestamp}`);
         return queueItem;
     }
 
@@ -151,10 +194,27 @@ class OfflineQueueService {
     }
 
     /**
+     * Clear only failed items from the queue
+     */
+    async clearFailedItems() {
+        const queue = await this.getQueue();
+        const pendingOnly = queue.filter(item => item.status === 'pending');
+        await this.saveQueue(pendingOnly);
+        const cleared = queue.length - pendingOnly.length;
+        console.log(`[OfflineQueue] Cleared ${cleared} failed items, ${pendingOnly.length} pending remain`);
+        return cleared;
+    }
+
+    /**
      * Get the count of pending items
      */
     async getPendingCount() {
+        const queue = await this.getQueue();
         const pending = await this.getPendingItems();
+        console.log(`[OfflineQueue] Total items: ${queue.length}, Pending/Failed: ${pending.length}`);
+        if (queue.length > 0) {
+            console.log('[OfflineQueue] Items:', queue.map(i => `${i.type}(${i.status})`).join(', '));
+        }
         return pending.length;
     }
 

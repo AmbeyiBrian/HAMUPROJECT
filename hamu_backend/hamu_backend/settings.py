@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-+=0@plt%71#_)8qd)adu7-y_ajc!jnair9rx&tx%^!apnkuvb&
 DEBUG = True
 
 # Fixed the ALLOWED_HOSTS format - each host should be a separate string
-ALLOWED_HOSTS = ['192.169.0.105', '192.169.0.105:8000','localhost:3000', 'localhost:000', 'localhost', '127.0.0.1', '10.5.4.36', '10.5.4.36:8000']
+ALLOWED_HOSTS = ['192.169.0.102', '192.169.0.102:8000','localhost:3000', 'localhost:000', 'localhost', '127.0.0.1', '10.5.4.36', '10.5.4.36:8000']
 
 # Add detailed logging configuration
 LOGGING = {
@@ -103,8 +103,8 @@ REST_FRAMEWORK = {
 
 # JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # Extended for seamless user experience
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # Extended for long-term sessions
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,

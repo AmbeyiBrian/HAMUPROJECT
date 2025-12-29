@@ -23,7 +23,8 @@ class SalesSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'customer': {'write_only': True},
             'shop': {'write_only': True},
-            'package': {'write_only': True}
+            'package': {'write_only': True},
+            'sold_at': {'required': False},  # Optional - defaults to now()
         }
     
     @transaction.atomic
@@ -42,6 +43,11 @@ class SalesSerializer(serializers.ModelSerializer):
                 return existing  # Return existing, don't create duplicate
         
         agent_name = validated_data.get('agent_name', 'System')
+        
+        # Set sold_at to now() if not provided
+        from django.utils import timezone
+        if 'sold_at' not in validated_data or validated_data['sold_at'] is None:
+            validated_data['sold_at'] = timezone.now()
         
         # Create the sale record
         sale = super().create(validated_data)

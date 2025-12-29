@@ -9,6 +9,8 @@ import { cacheService } from './CacheService';
 const API_BASE_URL = 'http://10.5.4.36:8000/api'; // Fixed IP format and port separator
 
 // Endpoints that can be queued for offline sync (POST/PUT operations)
+// NOTE: stock-items/ is intentionally NOT included - stock items should only be
+// created when online. Only stock-logs/ (quantity updates) work offline.
 const QUEUEABLE_ENDPOINTS = {
   'sales/': 'sale',
   'refills/': 'refill',
@@ -228,17 +230,36 @@ class Api {
       }
 
       // Trigger sync after successful response (backend is available)
-      syncService.triggerSync();
+      // Wrapped in try-catch to prevent sync errors from crashing the app
+      try {
+        syncService.triggerSync();
+      } catch (syncError) {
+        console.warn('[API] triggerSync failed (non-critical):', syncError.message);
+      }
 
       return data;
     } catch (error) {
-      console.error('API request failed:', error);
+      // Network errors are expected when offline - log as warning, not error
+      const isNetworkError = !error.response && (
+        error.message === 'Network Error' ||
+        error.message?.includes('Network request failed') ||
+        error.code === 'ECONNABORTED' ||
+        error.code === 'ECONNREFUSED'
+      );
+
+      if (isNetworkError) {
+        console.warn(`[API] Network unavailable for ${endpoint}`);
+      } else {
+        console.error('API request failed:', error);
+      }
 
       // Check if this is a queueable error and request
+      // Skip queueing if skipQueue is set (used by SyncService to avoid re-queueing)
       const method = options.method?.toUpperCase() || 'GET';
       const queueableType = this.getQueueableType(endpoint);
+      const skipQueue = options.skipQueue || false;
 
-      if (queueableType && (method === 'POST' || method === 'PUT') && this.isQueueableError(error)) {
+      if (queueableType && (method === 'POST' || method === 'PUT') && this.isQueueableError(error) && !skipQueue) {
         // Queue the transaction for later sync
         try {
           const requestBody = options.body ? JSON.parse(options.body) : {};
@@ -250,6 +271,19 @@ class Api {
           );
 
           console.log(`[API] Queued ${queueableType} for offline sync:`, queuedItem.id);
+
+          // Perform optimistic cache updates based on transaction type
+          // Wrapped in try-catch to prevent crashes from cache errors
+          try {
+            if (queueableType === 'refill') {
+              await cacheService.addOfflineRefillToCache({ ...requestBody, customer_details: { id: requestBody.customer } });
+            } else if (queueableType === 'sale') {
+              await cacheService.addOfflineSaleToCache(requestBody);
+            }
+            // Note: Customer balance updates are recalculated on next fetch
+          } catch (cacheError) {
+            console.warn('[API] Cache update failed (non-critical):', cacheError.message);
+          }
 
           // Return a special response indicating the item was queued
           return {
@@ -373,6 +407,12 @@ class Api {
 
     // Store the new auth token
     await AsyncStorage.setItem('authToken', data.access);
+
+    // Also store the new refresh token if rotated by the backend
+    if (data.refresh) {
+      console.log('[API] New refresh token issued (token rotation)');
+      await AsyncStorage.setItem('refreshToken', data.refresh);
+    }
 
     return data;
   }
@@ -519,10 +559,26 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of low stock items
    */
   async getLowStockItems(page = 1, filters = {}) {
-    return this.fetch('stock-items/low_stock/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      return await this.fetch('stock-items/low_stock/', {}, {
+        page,
+        ...filters
+      });
+    } catch (error) {
+      console.log('[API] getLowStockItems failed, trying cache:', error.message);
+      // Get cached stock items and filter for low stock
+      const cachedStockItems = await cacheService.getCachedStockItems(filters.shop || null);
+      if (cachedStockItems) {
+        // Filter for low stock items (quantity < reorderLevel or quantity < 10)
+        const lowStock = cachedStockItems.filter(item => {
+          const reorderLevel = item.reorder_level || 10;
+          return item.quantity < reorderLevel;
+        });
+        console.log(`[API] Using cached low stock items: ${lowStock.length}`);
+        return { results: lowStock, count: lowStock.length, fromCache: true };
+      }
+      return { results: [], count: 0, fromCache: true, offline: true };
+    }
   }
 
   /**
@@ -560,43 +616,73 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of customers
    */
   async getCustomers(page = 1, filters = {}) {
+    console.log(`[API] getCustomers called - page: ${page}, filters:`, filters);
     try {
       const data = await this.fetch('customers/', {}, {
         page,
         ...filters
       });
+      console.log(`[API] getCustomers SUCCESS from API - page: ${page}, results: ${data.results?.length}, next: ${data.next ? 'yes' : 'no'}`);
       // Cache customers for offline use (only first page without search)
+      // BUT don't overwrite if we already have a larger cache from export
       if (page === 1 && !filters.search && data.results) {
-        await cacheService.cacheCustomers(data.results, filters.shop);
+        const existingCache = await cacheService.getCachedCustomers(filters.shop || null);
+        const existingCount = existingCache?.length || 0;
+        if (existingCount < data.results.length) {
+          await cacheService.cacheCustomers(data.results, filters.shop);
+          console.log(`[API] Cached ${data.results.length} customers (previous: ${existingCount})`);
+        } else {
+          console.log(`[API] Skipping cache - export cache (${existingCount}) is larger than page 1 (${data.results.length})`);
+        }
       }
       return data;
     } catch (error) {
-      console.log('[API] getCustomers failed, trying cache');
-      // Try shop-specific cache first, then fallback to global cache
-      let cachedCustomers = await cacheService.getCachedCustomers(filters.shop);
-      if (!cachedCustomers && filters.shop) {
-        cachedCustomers = await cacheService.getCachedCustomers(null);
-        if (cachedCustomers) {
-          cachedCustomers = cachedCustomers.filter(customer =>
-            customer.shop === filters.shop || customer.shop_details?.id === filters.shop
-          );
-        }
+      console.log('[API] getCustomers FAILED, trying cache:', error.message);
+      // Get global cached customers (exportCustomersForOffline caches all globally)
+      let cachedCustomers = await cacheService.getCachedCustomers(null);
+      console.log(`[API] Cache retrieved: ${cachedCustomers ? cachedCustomers.length : 'null'} customers`);
+
+      // Apply shop filter locally if specified
+      if (cachedCustomers && cachedCustomers.length > 0 && filters.shop) {
+        const shopId = parseInt(filters.shop, 10); // Ensure number comparison
+        const beforeFilter = cachedCustomers.length;
+        cachedCustomers = cachedCustomers.filter(customer => {
+          const customerShopId = customer.shop_details?.id || customer.shop;
+          return parseInt(customerShopId, 10) === shopId;
+        });
+        console.log(`[API] Filtered by shop ${shopId}: ${beforeFilter} -> ${cachedCustomers.length}`);
       }
+
       // Apply local search filter if specified
-      if (cachedCustomers && filters.search) {
+      if (cachedCustomers && cachedCustomers.length > 0 && filters.search) {
         const searchLower = filters.search.toLowerCase();
         cachedCustomers = cachedCustomers.filter(customer =>
           customer.names?.toLowerCase().includes(searchLower) ||
           customer.phone_number?.includes(filters.search)
         );
       }
-      if (cachedCustomers && page === 1) {
-        console.log('[API] Using cached customers:', cachedCustomers.length);
-        return { results: cachedCustomers, fromCache: true };
+
+      if (cachedCustomers && cachedCustomers.length > 0) {
+        // Implement local pagination over cached data
+        const pageSize = 20;
+        const totalCount = cachedCustomers.length;
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedResults = cachedCustomers.slice(startIndex, endIndex);
+        const hasNext = endIndex < totalCount;
+
+        console.log(`[API] Offline pagination: page ${page}, start: ${startIndex}, end: ${endIndex}, results: ${paginatedResults.length}, total: ${totalCount}, hasNext: ${hasNext}`);
+        return {
+          results: paginatedResults,
+          count: totalCount,
+          next: hasNext ? `page=${page + 1}` : null,
+          previous: page > 1 ? `page=${page - 1}` : null,
+          fromCache: true
+        };
       }
       // Return empty results instead of throwing to prevent retry loop
       console.log('[API] No cached customers available, returning empty');
-      return { results: [], fromCache: true, offline: true };
+      return { results: [], count: 0, fromCache: true, offline: true };
     }
   }
 
@@ -606,7 +692,22 @@ class Api {
    * @returns {Promise<Object>} - Customer data
    */
   async getCustomer(id) {
-    return this.fetch(`customers/${id}/`);
+    try {
+      return await this.fetch(`customers/${id}/`);
+    } catch (error) {
+      console.log(`[API] getCustomer(${id}) failed, trying cache:`, error.message);
+      // Try to find customer in cached list
+      const cachedCustomers = await cacheService.getCachedCustomers(null);
+      if (cachedCustomers) {
+        const customer = cachedCustomers.find(c => c.id === parseInt(id, 10));
+        if (customer) {
+          console.log(`[API] Found customer ${id} in cache`);
+          return { ...customer, fromCache: true };
+        }
+      }
+      console.log(`[API] Customer ${id} not found in cache`);
+      throw error;
+    }
   }
 
   /**
@@ -669,7 +770,9 @@ class Api {
         console.log('[API] Using cached sales:', cachedSales.length);
         return { results: cachedSales, fromCache: true };
       }
-      throw error;
+      // Return empty results instead of throwing to prevent UI errors
+      console.log('[API] No cached sales available, returning empty');
+      return { results: [], fromCache: true, offline: true };
     }
   }
 
@@ -679,7 +782,20 @@ class Api {
    * @returns {Promise<Object>} - Sale data
    */
   async getSale(id) {
-    return this.fetch(`sales/${id}/`);
+    try {
+      return await this.fetch(`sales/${id}/`);
+    } catch (error) {
+      console.log(`[API] getSale(${id}) failed, trying cache:`, error.message);
+      const cachedSales = await cacheService.getCachedSales(null);
+      if (cachedSales) {
+        const sale = cachedSales.find(s => s.id === parseInt(id, 10));
+        if (sale) {
+          console.log(`[API] Found sale ${id} in cache`);
+          return { ...sale, fromCache: true };
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -725,11 +841,25 @@ class Api {
           );
         }
       }
-      if (cachedRefills && page === 1) {
-        console.log('[API] Using cached refills:', cachedRefills.length);
-        return { results: cachedRefills, fromCache: true };
+      // If no shop cache found, get global cache
+      if (!cachedRefills) {
+        cachedRefills = await cacheService.getCachedRefills(null);
       }
-      throw error;
+      // Apply customer filter if specified (for customer detail page)
+      if (cachedRefills && filters.customer) {
+        const customerId = parseInt(filters.customer, 10);
+        cachedRefills = cachedRefills.filter(refill =>
+          refill.customer === customerId || refill.customer_details?.id === customerId
+        );
+        console.log(`[API] Filtered refills by customer ${customerId}: ${cachedRefills.length}`);
+      }
+      if (cachedRefills) {
+        console.log('[API] Using cached refills:', cachedRefills.length);
+        return { results: cachedRefills, count: cachedRefills.length, fromCache: true };
+      }
+      // Return empty results instead of throwing to prevent UI errors
+      console.log('[API] No cached refills available, returning empty');
+      return { results: [], count: 0, fromCache: true, offline: true };
     }
   }
 
@@ -739,7 +869,20 @@ class Api {
    * @returns {Promise<Object>} - Refill data
    */
   async getRefill(id) {
-    return this.fetch(`refills/${id}/`);
+    try {
+      return await this.fetch(`refills/${id}/`);
+    } catch (error) {
+      console.log(`[API] getRefill(${id}) failed, trying cache:`, error.message);
+      const cachedRefills = await cacheService.getCachedRefills(null);
+      if (cachedRefills) {
+        const refill = cachedRefills.find(r => r.id === parseInt(id, 10));
+        if (refill) {
+          console.log(`[API] Found refill ${id} in cache`);
+          return { ...refill, fromCache: true };
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -799,7 +942,9 @@ class Api {
         }
         return { results: filteredPackages, fromCache: true };
       }
-      throw error;
+      // Return empty results instead of throwing to prevent UI errors
+      console.log('[API] No cached packages available, returning empty');
+      return { results: [], fromCache: true, offline: true };
     }
   }
 
@@ -821,10 +966,36 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of meter readings
    */
   async getMeterReadings(page = 1, filters = {}) {
-    return this.fetch('meter-readings/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('meter-readings/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of meter readings
+      if (page === 1 && data.results) {
+        await cacheService.cacheMeterReadings(data.results, filters.shop);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getMeterReadings failed, trying cache');
+      // Try shop-specific cache first, then fallback to global cache
+      let cachedReadings = await cacheService.getCachedMeterReadings(filters.shop);
+      if (!cachedReadings && filters.shop) {
+        cachedReadings = await cacheService.getCachedMeterReadings(null);
+        if (cachedReadings) {
+          cachedReadings = cachedReadings.filter(reading =>
+            reading.shop === filters.shop || reading.shop_details?.id === filters.shop
+          );
+        }
+      }
+      if (cachedReadings && page === 1) {
+        console.log('[API] Using cached meter readings:', cachedReadings.length);
+        return { results: cachedReadings, fromCache: true };
+      }
+      // Return empty results instead of throwing to prevent UI errors
+      console.log('[API] No cached meter readings available, returning empty');
+      return { results: [], fromCache: true, offline: true };
+    }
   }
 
   /**
@@ -878,7 +1049,9 @@ class Api {
         console.log('[API] Using cached expenses:', cachedExpenses.length);
         return { results: cachedExpenses, fromCache: true };
       }
-      throw error;
+      // Return empty results instead of throwing to prevent UI errors
+      console.log('[API] No cached expenses available, returning empty');
+      return { results: [], fromCache: true, offline: true };
     }
   }
 
@@ -928,12 +1101,26 @@ class Api {
       return data;
     } catch (error) {
       console.log('[API] getCredits failed, trying cache');
-      const cachedCredits = await cacheService.getCachedCredits(filters.shop);
-      if (cachedCredits && page === 1) {
-        console.log('[API] Using cached credits:', cachedCredits.length);
-        return { results: cachedCredits, fromCache: true };
+      let cachedCredits = await cacheService.getCachedCredits(filters.shop);
+      // If no shop cache, get global cache
+      if (!cachedCredits) {
+        cachedCredits = await cacheService.getCachedCredits(null);
       }
-      throw error;
+      // Apply customer filter if specified (for customer detail page)
+      if (cachedCredits && filters.customer) {
+        const customerId = parseInt(filters.customer, 10);
+        cachedCredits = cachedCredits.filter(credit =>
+          credit.customer === customerId || credit.customer_details?.id === customerId
+        );
+        console.log(`[API] Filtered credits by customer ${customerId}: ${cachedCredits.length}`);
+      }
+      if (cachedCredits) {
+        console.log('[API] Using cached credits:', cachedCredits.length);
+        return { results: cachedCredits, count: cachedCredits.length, fromCache: true };
+      }
+      // Return empty results instead of throwing to prevent UI errors
+      console.log('[API] No cached credits available, returning empty');
+      return { results: [], count: 0, fromCache: true, offline: true };
     }
   }
 
@@ -991,10 +1178,25 @@ class Api {
    * @returns {Promise<Object>} - Paginated list of SMS messages
    */
   async getSMSHistory(page = 1, filters = {}) {
-    return this.fetch('sms/', {}, {
-      page,
-      ...filters
-    });
+    try {
+      const data = await this.fetch('sms/', {}, {
+        page,
+        ...filters
+      });
+      // Cache first page of SMS history
+      if (page === 1 && data.results) {
+        await cacheService.cacheSMSHistory(data.results);
+      }
+      return data;
+    } catch (error) {
+      console.log('[API] getSMSHistory failed, trying cache:', error.message);
+      const cachedSMS = await cacheService.getCachedSMSHistory();
+      if (cachedSMS && page === 1) {
+        console.log('[API] Using cached SMS history:', cachedSMS.length);
+        return { results: cachedSMS, count: cachedSMS.length, fromCache: true };
+      }
+      return { results: [], count: 0, fromCache: true, offline: true };
+    }
   }
 
   /**
@@ -1101,11 +1303,15 @@ class Api {
    */
   async exportCustomersForOffline() {
     try {
+      console.log('[API] Calling export_for_offline endpoint...');
       const data = await this.fetch('customers/export_for_offline/');
+      console.log(`[API] Export endpoint returned: count=${data.count}, results=${data.results?.length}`);
       // Cache all customers
-      if (data.results) {
+      if (data.results && data.results.length > 0) {
         await cacheService.cacheCustomers(data.results, null);
-        console.log(`[API] Exported ${data.count} customers for offline`);
+        console.log(`[API] Exported and cached ${data.results.length} customers for offline`);
+      } else {
+        console.warn('[API] Export returned no results!');
       }
       return data;
     } catch (error) {
@@ -1157,6 +1363,8 @@ class Api {
       { name: 'stockItems', fn: () => this.getStockItems(1, { shop: shopId }) },
       { name: 'expenses', fn: () => this.getExpenses(1, { shop: shopId }) },
       { name: 'credits', fn: () => this.getCredits(1, { shop: shopId }) },
+      { name: 'meterReadings', fn: () => this.getMeterReadings(1, { shop: shopId }) },
+      { name: 'smsHistory', fn: () => this.getSMSHistory(1) },
     ];
 
     for (const task of preloadTasks) {

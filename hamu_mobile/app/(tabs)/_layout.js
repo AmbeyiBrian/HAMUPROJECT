@@ -2,15 +2,13 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { useAuth } from '../../services/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, View, Text, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Platform, View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Import the local Colors file
 import Colors from '../Colors';
 
 export default function TabLayout() {
   const { user, isDirector } = useAuth();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   // Log user role information for debugging
@@ -20,11 +18,6 @@ export default function TabLayout() {
 
   // If no user is logged in, we shouldn't show the tabs at all
   if (!user) return null;
-
-  // Function to navigate to profile screen
-  const navigateToProfile = () => {
-    router.push('/profile');
-  };
 
   return (
     <Tabs
@@ -42,34 +35,8 @@ export default function TabLayout() {
           fontSize: 12,
           fontWeight: '500',
         },
-        headerStyle: {
-          backgroundColor: Colors.header,
-          height: Platform.OS === 'ios' ? 90 : 70,
-          elevation: 4,
-          shadowOpacity: 0.2,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-        },
-        headerTintColor: Colors.headerText,
-        headerTitleStyle: {
-          fontWeight: 'bold',
-          fontSize: 18,
-        },
-        // Add status bar padding for iOS
-        headerTitleContainerStyle: {
-          paddingTop: Platform.OS === 'ios' ? 10 : 0,
-        },
-        // Make header safe for status bar
-        headerTopInsetEnabled: true,
-        // Add profile icon to the right of all tab headers
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={navigateToProfile}
-            style={{ marginRight: 15 }}
-          >
-            <Ionicons name="person-circle-outline" size={28} color={Colors.headerText} />
-          </TouchableOpacity>
-        ),
+        // Hide all tab screen headers
+        headerShown: false,
       }}>
 
       <Tabs.Screen
@@ -83,7 +50,7 @@ export default function TabLayout() {
               </Text>
               {user?.shop && !isDirector && (
                 <Text style={{ marginLeft: 8, fontSize: 14, color: Colors.headerText, opacity: 0.8 }}>
-                  ({user.shop.name})
+                  ({user.shop?.name || 'Shop'})
                 </Text>
               )}
             </View>
@@ -105,7 +72,7 @@ export default function TabLayout() {
               </Text>
               {user?.shop && !isDirector && (
                 <Text style={{ marginLeft: 8, fontSize: 14, color: Colors.headerText, opacity: 0.8 }}>
-                  ({user.shop.name})
+                  ({user.shop?.name || 'Shop'})
                 </Text>
               )}
             </View>
@@ -226,12 +193,14 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Profile screen is now hidden from the tab bar but still accessible from the header icon */}
+      {/* Profile tab */}
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          href: null, // This hides it from the tab bar
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle" size={size} color={color} />
+          ),
         }}
       />
 

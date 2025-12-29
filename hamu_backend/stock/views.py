@@ -189,6 +189,16 @@ class StockLogViewSet(viewsets.ModelViewSet):
             # Agents only see stock logs from their shop
             return StockLog.objects.filter(shop=user.shop).select_related('shop', 'stock_item')
     
+    def create(self, request, *args, **kwargs):
+        """Override create to log validation errors for debugging sync issues"""
+        from rest_framework import status
+        print(f"[StockLogViewSet] Received POST data: {request.data}")
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print(f"[StockLogViewSet] VALIDATION ERRORS: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return super().create(request, *args, **kwargs)
+    
     def perform_create(self, serializer):
         """Automatically set shop and director_name for agent users"""
         user = self.request.user

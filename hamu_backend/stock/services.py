@@ -1,5 +1,6 @@
 from django.db.models import Sum, F, Q, Case, When, Value, IntegerField
 from django.db import connection, transaction
+from django.utils import timezone
 from .models import StockItem, StockLog
 from sales.models import Sales
 from refills.models import Refills
@@ -194,7 +195,8 @@ class StockCalculationService:
                 quantity_change=-bottle_quantity,  # Negative for deduction
                 notes=notes,
                 shop=shop,
-                director_name=director_name
+                director_name=director_name,
+                log_date=timezone.now()
             )
             created_logs.append(bottle_log)
             
@@ -204,7 +206,8 @@ class StockCalculationService:
                 quantity_change=-bundle_quantity,  # Negative for deduction
                 notes=notes,
                 shop=shop,
-                director_name=director_name
+                director_name=director_name,
+                log_date=timezone.now()
             )
             created_logs.append(shrink_wrap_log)
             
@@ -254,7 +257,8 @@ class StockCalculationService:
                         quantity_change=-quantity,  # Negative for deduction
                         notes=notes,
                         shop=shop,
-                        director_name=agent_name
+                        director_name=agent_name,
+                        log_date=timezone.now()
                     )
                     created_logs.append(cap_log)
                     
@@ -282,7 +286,8 @@ class StockCalculationService:
                         quantity_change=-quantity,  # Negative for deduction
                         notes=notes,
                         shop=shop,
-                        director_name=agent_name
+                        director_name=agent_name,
+                        log_date=timezone.now()
                     )
                     created_logs.append(label_log)
                     
@@ -342,7 +347,8 @@ class StockCalculationService:
                         quantity_change=-quantity,  # Negative for deduction
                         notes=notes,
                         shop=shop,
-                        director_name=agent_name
+                        director_name=agent_name,
+                        log_date=timezone.now()
                     )
                     created_logs.append(bottle_log)
                     
@@ -366,7 +372,8 @@ class StockCalculationService:
                             quantity_change=-quantity,  # Negative for deduction
                             notes=notes,
                             shop=shop,
-                            director_name=agent_name
+                            director_name=agent_name,
+                            log_date=timezone.now()
                         )
                         created_logs.append(label_log)
                         
@@ -402,7 +409,8 @@ class StockCalculationService:
                             quantity_change=-quantity,  # Negative for deduction
                             notes=notes,
                             shop=shop,
-                            director_name=agent_name
+                            director_name=agent_name,
+                            log_date=timezone.now()
                         )
                         created_logs.append(bundle_log)
                         

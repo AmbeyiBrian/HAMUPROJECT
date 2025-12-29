@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
+import {
+  StyleSheet,
+  View,
+  Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
@@ -31,7 +31,7 @@ export default function AddStockLogScreen() {
     notes: '',
   });
   const [errors, setErrors] = useState({});
-  
+
   const { user } = useAuth();
   const router = useRouter();
   const isDirector = user?.user_class === 'Director';
@@ -43,7 +43,7 @@ export default function AddStockLogScreen() {
         if (isDirector) {
           const response = await api.getShops();
           setShops(response.results || []);
-        } else {
+        } else if (user?.shop_details?.id) {
           // For shop agents, set their shop as default
           setFormData(prev => ({
             ...prev,
@@ -64,12 +64,12 @@ export default function AddStockLogScreen() {
   // Load stock items when shop changes
   const loadStockItemsForShop = async (shopId) => {
     if (!shopId) return;
-    
+
     try {
       setIsLoading(true);
       const response = await api.getStockItems(1, { shop: shopId });
       setStockItems(response.results || []);
-      
+
       // Reset stock item selection when shop changes
       setFormData(prev => ({
         ...prev,
@@ -89,9 +89,9 @@ export default function AddStockLogScreen() {
       ...prev,
       shop: shopId
     }));
-    
+
     loadStockItemsForShop(shopId);
-    
+
     // Clear error when field is edited
     if (errors.shop) {
       setErrors(prev => ({
@@ -107,7 +107,7 @@ export default function AddStockLogScreen() {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -120,21 +120,21 @@ export default function AddStockLogScreen() {
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.shop) {
       newErrors.shop = 'Shop is required';
     }
-    
+
     if (!formData.stock_item) {
       newErrors.stock_item = 'Stock item is required';
     }
-    
+
     // Convert quantity to number for validation
     const quantityChange = parseInt(formData.quantity_change);
     if (isNaN(quantityChange) || quantityChange === 0) {
       newErrors.quantity_change = 'Please enter a valid quantity (positive for additions, negative for removals)';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -144,10 +144,10 @@ export default function AddStockLogScreen() {
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
+
       // Create stock log entry
       const stockLogData = {
         shop: formData.shop,
@@ -156,39 +156,49 @@ export default function AddStockLogScreen() {
         notes: formData.notes || (parseInt(formData.quantity_change) > 0 ? 'Stock addition' : 'Stock removal'),
         director_name: user.names
       };
-      
-      await api.createStockLog(stockLogData);
-      
+
+      const result = await api.createStockLog(stockLogData);
+
+      // Check if queued offline
+      if (result._offlineQueued) {
+        Alert.alert(
+          'Saved Offline',
+          `Stock change will be recorded when connected.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        return;
+      }
+
       // Show success message
       Alert.alert(
         'Success',
         `Stock ${parseInt(formData.quantity_change) > 0 ? 'addition' : 'removal'} recorded successfully.`,
         [
-          { 
-            text: 'OK', 
-            onPress: () => router.back() 
+          {
+            text: 'OK',
+            onPress: () => router.back()
           }
         ]
       );
     } catch (error) {
       console.error('Failed to create stock log:', error);
-      
+
       // Improved error handling for API errors
       let errorMessage = 'Failed to record stock change';
-      
+
       // Check if this is an API error with data
       if (error.data && Array.isArray(error.data) && error.data.length > 0) {
         const errorDetail = error.data[0];
-        
+
         if (typeof errorDetail === 'string') {
           // Special handling for water bundle errors
           if (errorDetail.includes('Not enough') && errorDetail.includes('in stock')) {
             // Extract the details from the error message
             const match = errorDetail.match(/Not enough (.+) in stock\. Required: (\d+), Available: (\d+)/);
-            
+
             if (match) {
               const [_, itemDescription, required, available] = match;
-              
+
               // Create a clear, formatted error message
               errorMessage = `Cannot process this change:\n\nInsufficient ${itemDescription}.\n\nRequired: ${required}\nCurrently available: ${available}\n\nPlease add more stock first.`;
             } else {
@@ -204,7 +214,7 @@ export default function AddStockLogScreen() {
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert(
         'Stock Update Failed',
         errorMessage,
@@ -234,7 +244,7 @@ export default function AddStockLogScreen() {
           <Text style={styles.headerTitle}>Record Stock Change</Text>
           <Text style={styles.headerSubtitle}>Add or remove inventory items</Text>
         </View>
-        
+
         <View style={styles.formContainer}>
           {/* Shop Selection (only for directors) */}
           {isDirector && (
@@ -256,7 +266,7 @@ export default function AddStockLogScreen() {
               {errors.shop && <Text style={styles.errorText}>{errors.shop}</Text>}
             </View>
           )}
-          
+
           {/* Stock Item */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Stock Item *</Text>
@@ -276,10 +286,10 @@ export default function AddStockLogScreen() {
                   >
                     <Picker.Item label="Select an item" value={null} />
                     {stockItems.map(item => (
-                      <Picker.Item 
-                        key={item.id} 
-                        label={`${item.item_name} (${item.item_type})`} 
-                        value={item.id} 
+                      <Picker.Item
+                        key={item.id}
+                        label={`${item.item_name} (${item.item_type})`}
+                        value={item.id}
                       />
                     ))}
                   </Picker>
@@ -291,7 +301,7 @@ export default function AddStockLogScreen() {
               </>
             )}
           </View>
-          
+
           {/* Quantity Change */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Quantity Change *</Text>
@@ -308,7 +318,7 @@ export default function AddStockLogScreen() {
             </View>
             {errors.quantity_change && <Text style={styles.errorText}>{errors.quantity_change}</Text>}
           </View>
-          
+
           {/* Notes */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Notes</Text>

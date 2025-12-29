@@ -6,7 +6,7 @@
  */
 
 import { offlineQueue } from './OfflineQueue';
-import api from './api';
+// NOTE: api is imported lazily in syncItem() to break require cycle
 import { AppState } from 'react-native';
 import eventEmitter from './EventEmitter';
 
@@ -121,11 +121,15 @@ class SyncServiceClass {
      */
     async syncItem(item) {
         try {
+            // Lazy import to break require cycle
+            const api = require('./api').default;
+
             // Use api.fetch with the appropriate method
-            // Note: api.fetch handles the body serialization internally
+            // Note: skipQueue prevents the item from being re-queued if sync fails
             const response = await api.fetch(item.endpoint, {
                 method: item.method.toUpperCase(),
                 body: JSON.stringify(item.data),
+                skipQueue: true,  // CRITICAL: Prevent re-queueing during sync
             });
 
             return { success: true, data: response };

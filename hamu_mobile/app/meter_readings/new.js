@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Alert, 
-  ScrollView, 
-  TouchableOpacity, 
-  Image, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  TouchableOpacity,
+  Image,
   ActivityIndicator,
   Modal,
   FlatList,
@@ -94,19 +94,19 @@ export default function NewMeterReadingScreen() {
       }
 
       // Launch camera or picker
-      const result = useCamera 
+      const result = useCamera
         ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.8,
-          })
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        })
         : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.8,
-          });
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Compress the image to reduce upload size
@@ -115,7 +115,7 @@ export default function NewMeterReadingScreen() {
           [{ resize: { width: 800 } }],
           { compress: 0.7, format: SaveFormat.JPEG }
         );
-        
+
         setMeterPhoto({
           uri: manipulatedImage.uri,
           type: 'image/jpeg',
@@ -124,6 +124,23 @@ export default function NewMeterReadingScreen() {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to select image: ' + error.message);
+    }
+  };
+
+  // Helper function to convert image URI to base64
+  const imageToBase64 = async (uri) => {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Failed to convert image to base64:', error);
+      return null;
     }
   };
 
@@ -139,7 +156,7 @@ export default function NewMeterReadingScreen() {
       Alert.alert('Error', 'Please select a meter reading type');
       return;
     }
-    
+
     // For directors, ensure they've selected a shop
     if (isDirector && !selectedShop) {
       Alert.alert('Error', 'Please select a shop for this meter reading');
@@ -149,24 +166,12 @@ export default function NewMeterReadingScreen() {
     try {
       setSubmitting(true);
 
-      // Create form data for multipart upload (for the image)
-      const formData = new FormData();
-      formData.append('value', parseFloat(value));
-      formData.append('reading_type', readingType);
-      
-      // Add agent_name from the user object
-      if (user && user.names) {
-        formData.append('agent_name', user.names);
-      }
-      
-      // Add shop ID - required field
+      // Determine shop ID
+      let shopId;
       if (isDirector && selectedShop) {
-        // For directors, use the selected shop
-        formData.append('shop', selectedShop.id);
+        shopId = selectedShop.id;
       } else if (user && user.shop_details && user.shop_details.id) {
-        // For agents, use their assigned shop from shop_details
-        formData.append('shop', user.shop_details.id);
-        console.log('Agent shop ID:', user.shop_details.id);
+        shopId = user.shop_details.id;
       } else {
         console.error('Missing shop information:', { user });
         Alert.alert('Error', 'Shop is required for meter readings. Please try again or contact support.');
@@ -174,21 +179,48 @@ export default function NewMeterReadingScreen() {
         return;
       }
 
-      // Add meter photo if selected
+      // If there's a meter photo, convert to base64 for offline compatibility
+      let meterPhotoBase64 = null;
       if (meterPhoto) {
-        formData.append('meter_photo', meterPhoto);
+        meterPhotoBase64 = await imageToBase64(meterPhoto.uri);
       }
 
-      console.log('Sending meter reading data:', Object.fromEntries(formData));
+      // Prepare meter reading data as JSON (can be queued offline)
+      const meterReadingData = {
+        value: parseFloat(value),
+        reading_type: readingType,
+        agent_name: user?.names || 'Unknown',
+        shop: shopId,
+      };
 
-      // Use the API to create the meter reading
-      await api.createMeterReading(formData);
-      
-      Alert.alert(
-        'Success', 
-        'Meter reading recorded successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      // Add meter photo as base64 if available
+      if (meterPhotoBase64) {
+        meterReadingData.meter_photo_base64 = meterPhotoBase64;
+      }
+
+      console.log('Sending meter reading data (with photo:', !!meterPhotoBase64, ')');
+
+      // Use JSON API call - can be queued offline
+      const result = await api.fetch('meter-readings/', {
+        method: 'POST',
+        body: JSON.stringify(meterReadingData),
+      });
+
+      // Check if queued offline
+      if (result._offlineQueued) {
+        Alert.alert(
+          'Saved Offline',
+          'Meter reading saved to your device. It will sync when you have internet connection.' +
+          (meterPhotoBase64 ? '\n\nNote: Photo will also be uploaded on sync.' : ''),
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert(
+          'Success',
+          'Meter reading recorded successfully',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
     } catch (error) {
       console.error('Submit error:', error);
       Alert.alert('Error', 'Failed to save meter reading: ' + (error.message || 'Unknown error'));
@@ -230,7 +262,7 @@ export default function NewMeterReadingScreen() {
         {isDirector && (
           <>
             <Text style={styles.label}>Shop</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.shopSelector}
               onPress={() => setShopModalVisible(true)}
             >
@@ -258,9 +290,9 @@ export default function NewMeterReadingScreen() {
                       <Ionicons name="close" size={24} color="#333" />
                     </TouchableOpacity>
                   </View>
-                  
+
                   <Divider />
-                  
+
                   {loading ? (
                     <ActivityIndicator size="large" color="#007bff" style={styles.loader} />
                   ) : shops.length > 0 ? (
@@ -304,12 +336,12 @@ export default function NewMeterReadingScreen() {
         </RadioButton.Group>
 
         <Text style={styles.label}>Meter Photo (Optional)</Text>
-        
+
         <View style={styles.imageContainer}>
           {meterPhoto ? (
             <>
               <Image source={{ uri: meterPhoto.uri }} style={styles.previewImage} />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.removeButton}
                 onPress={() => setMeterPhoto(null)}
               >
@@ -325,17 +357,17 @@ export default function NewMeterReadingScreen() {
         </View>
 
         <View style={styles.imageButtonsContainer}>
-          <Button 
-            mode="contained" 
-            icon="camera" 
+          <Button
+            mode="contained"
+            icon="camera"
             onPress={() => pickImage(true)}
             style={[styles.imageButton, styles.cameraButton]}
           >
             Take Photo
           </Button>
-          <Button 
-            mode="contained" 
-            icon="image" 
+          <Button
+            mode="contained"
+            icon="image"
             onPress={() => pickImage(false)}
             style={[styles.imageButton, styles.galleryButton]}
           >
