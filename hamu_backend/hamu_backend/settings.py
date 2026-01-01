@@ -200,7 +200,8 @@ DATABASES = {
         'NAME': 'hamu_db',
         'USER': 'postgres',
         'PASSWORD': 'HomeManager@2025',
-        'HOST': 'localhost'
+        'HOST': 'localhost',
+        'PORT': '5433',  # Production server PostgreSQL port
     },
     'old_db': {
         'ENGINE': 'django.db.backends.postgresql',
