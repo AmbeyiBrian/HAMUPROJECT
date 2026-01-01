@@ -45,29 +45,21 @@ class StockItemViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
         """
-        List stock items that are low in inventory
+        List stock items that are low in inventory.
+        Uses item.threshold from database for consistency with web analytics.
         """
         queryset = self.get_queryset()
-        
-        # Get threshold from query params or use defaults
-        thresholds = {
-            'Bottle': int(request.query_params.get('bottle_threshold', 10)),
-            'Shrink Wrap': int(request.query_params.get('shrink_wrap_threshold', 3)),
-            'Cap': int(request.query_params.get('cap_threshold', 20)),
-            'Label': int(request.query_params.get('label_threshold', 20)),
-            'default': int(request.query_params.get('default_threshold', 5))
-        }
         
         # For each stock item, calculate current quantity using the service
         results = []
         for item in queryset:
             quantity = StockCalculationService.get_current_stock_level(item)
             
-            # Get appropriate threshold based on item type
-            threshold = thresholds.get(item.item_type, thresholds['default'])
+            # Use item.threshold from database (same as web analytics)
+            threshold = item.threshold if item.threshold else 5  # Default 5 if not set
             
-            # Check if quantity is below threshold
-            if quantity < threshold:
+            # Check if quantity is at or below threshold (consistent with web: <=)
+            if quantity <= threshold:
                 results.append({
                     'id': item.id,
                     'shop': item.shop.shopName,

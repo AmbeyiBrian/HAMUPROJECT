@@ -33,6 +33,12 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker"
     ],
-    "scheme": "hamu"
+    "scheme": "hamu",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2c013a5a-c18c-4c3e-b4a9-04693093c7bd"
+      }
+    }
   }
 }

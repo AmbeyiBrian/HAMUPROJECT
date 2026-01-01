@@ -39,6 +39,12 @@ const chartConfig = {
     propsForDots: { r: '4', strokeWidth: '2', stroke: Colors.primary },
 };
 
+// Format currency with comma separators (e.g., 32,000)
+const formatCurrency = (value) => {
+    if (value === null || value === undefined) return '0';
+    return Math.round(value).toLocaleString();
+};
+
 export default function AnalyticsScreen() {
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
@@ -263,11 +269,11 @@ export default function AnalyticsScreen() {
     const getPaymentModeData = () => {
         if (!salesData?.sales_by_payment_mode) return [];
         const modes = salesData.sales_by_payment_mode;
-        const colors = ['#0077B6', '#2a9d8f', '#fb8500'];
+        const colors = ['#0077B6', '#2a9d8f', '#fb8500', '#e63946', '#7209b7'];
         return Object.entries(modes)
             .filter(([_, value]) => value > 0)
             .map(([name, value], index) => ({
-                name,
+                name: `${name}: ${formatCurrency(value)}`,  // Show formatted value in legend
                 population: value,
                 color: colors[index % colors.length],
                 legendFontColor: Colors.text,
@@ -470,7 +476,6 @@ export default function AnalyticsScreen() {
                             accessor="population"
                             backgroundColor="transparent"
                             paddingLeft="15"
-                            absolute
                         />
                     </View>
                 )}
