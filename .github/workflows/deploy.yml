@@ -74,11 +74,13 @@ jobs:
           
       - name: Deploy web via rsync
         run: |
-          rsync -avz --delete \
+          rsync -avz \
             -e "ssh -i ~/.ssh/lightsail_key" \
             --exclude '.git' \
             --exclude 'node_modules' \
             --exclude '.env' \
+            --exclude 'build' \
+            --exclude 'deployed' \
             ./hamu_web/ \
             ubuntu@${{ secrets.LIGHTSAIL_HOST }}:/home/myProject/hamu_web/
             

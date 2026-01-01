@@ -28,7 +28,24 @@ SECRET_KEY = 'django-insecure-+=0@plt%71#_)8qd)adu7-y_ajc!jnair9rx&tx%^!apnkuvb&
 DEBUG = True
 
 # Fixed the ALLOWED_HOSTS format - each host should be a separate string
-ALLOWED_HOSTS = ['192.169.0.102', '192.169.0.102:8000','localhost:3000', 'localhost:000', 'localhost', '127.0.0.1', '10.5.4.36', '10.5.4.36:8000']
+ALLOWED_HOSTS = [
+    # Production domains
+    'api.hamuwater.com',
+    'backend.hamuwater.com',
+    'hamuwater.com',
+    'www.hamuwater.com',
+    # Lightsail IP
+    '16.170.121.206',
+    # Local development
+    '192.169.0.102',
+    '192.169.0.102:8000',
+    'localhost:3000',
+    'localhost:8000',
+    'localhost',
+    '127.0.0.1',
+    '10.5.4.36',
+    '10.5.4.36:8000',
+]
 
 # Add detailed logging configuration
 LOGGING = {
