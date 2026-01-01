@@ -113,11 +113,13 @@ export default function MoreScreen() {
                     <MenuItem icon="time" title="Sync Queue" subtitle="View pending transactions" iconBg={`${Colors.info}20`} color={Colors.info} onPress={() => router.push('/sync-queue')} />
                 </View>
 
-                {/* Tools */}
+                {/* Tools - SMS for all, Reports for Directors only */}
                 <Text style={styles.sectionTitle}>Tools</Text>
                 <View style={styles.section}>
                     <MenuItem icon="chatbubbles" title="SMS" iconBg={`${Colors.info}20`} color={Colors.info} onPress={() => router.push('/sms')} />
-                    <MenuItem icon="bar-chart" title="Reports" iconBg={`${Colors.success}20`} color={Colors.success} onPress={() => router.push('/analytics')} />
+                    {(user?.user_class === 'Director' || user?.user_class === 'DIRECTOR') && (
+                        <MenuItem icon="bar-chart" title="Reports" iconBg={`${Colors.success}20`} color={Colors.success} onPress={() => router.push('/analytics')} />
+                    )}
                 </View>
 
                 {/* Settings */}

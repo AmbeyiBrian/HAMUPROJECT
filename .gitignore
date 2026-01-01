@@ -68,3 +68,8 @@ htmlcov/
 # Secrets
 *.pem
 secrets.json
+
+# Database dumps
+*.sql
+db_backup_*.sql
+*_dump.sql

@@ -1,6 +1,6 @@
 // Create a config file if it doesn't exist
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://api.hamuwater.com/api' 
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://backend.hamuwater.com/api'
   : 'http://localhost:8000/api';
 
 // You might also want to add webapp URL for other frontend configurations

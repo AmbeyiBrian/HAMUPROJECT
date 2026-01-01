@@ -112,6 +112,7 @@ export default function NewCustomerScreen() {
                 room_number: form.room_number.trim(),
                 notes: form.notes.trim(),
                 shop: shopId,
+                date_registered: new Date().toISOString(), // Capture registration time for offline sync
             };
 
             await offlineQueue.addToQueue('customer', 'customers/', customerData, 'POST');

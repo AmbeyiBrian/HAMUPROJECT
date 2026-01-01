@@ -21,9 +21,12 @@ import Colors from '../constants/Colors';
 
 export default function VerifyCodeScreen() {
     const router = useRouter();
-    const { phone } = useLocalSearchParams();
+    const params = useLocalSearchParams();
+    // Ensure phone is a string (useLocalSearchParams can return array)
+    const phone = Array.isArray(params.phone) ? params.phone[0] : params.phone;
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isResending, setIsResending] = useState(false);
 
     async function handleVerify() {
         if (!code.trim()) {
@@ -31,25 +34,64 @@ export default function VerifyCodeScreen() {
             return;
         }
 
+        if (!phone) {
+            Alert.alert('Error', 'Phone number is missing. Please go back and try again.');
+            return;
+        }
+
         setIsLoading(true);
         try {
+            const requestBody = { phone_number: phone, code: code.trim() };
+            console.log('[VerifyCode] Sending request:', requestBody);
+
             const response = await fetch(`${config.API_BASE_URL}/users/verify_reset_code/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone_number: phone, code: code.trim() }),
+                body: JSON.stringify(requestBody),
             });
 
             const data = await response.json();
+            console.log('[VerifyCode] Response:', response.status, data);
 
             if (response.ok) {
                 router.push({ pathname: '/reset-password', params: { phone, code: code.trim() } });
             } else {
-                Alert.alert('Error', data.detail || 'Invalid code');
+                // Show specific error from backend
+                const errorMsg = data.code || data.phone_number || data.detail || data.non_field_errors || 'Invalid code';
+                Alert.alert('Error', Array.isArray(errorMsg) ? errorMsg[0] : errorMsg);
+            }
+        } catch (error) {
+            console.error('[VerifyCode] Error:', error);
+            Alert.alert('Error', 'Network error. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    async function handleResend() {
+        if (!phone) {
+            Alert.alert('Error', 'Phone number is missing.');
+            return;
+        }
+
+        setIsResending(true);
+        try {
+            const response = await fetch(`${config.API_BASE_URL}/users/request_password_reset/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone_number: phone }),
+            });
+
+            if (response.ok) {
+                Alert.alert('Success', 'A new code has been sent to your phone');
+            } else {
+                const data = await response.json();
+                Alert.alert('Error', data.detail || 'Failed to resend code');
             }
         } catch (error) {
             Alert.alert('Error', 'Network error. Please try again.');
         } finally {
-            setIsLoading(false);
+            setIsResending(false);
         }
     }
 
@@ -88,6 +130,18 @@ export default function VerifyCodeScreen() {
                         <ActivityIndicator color={Colors.textOnPrimary} />
                     ) : (
                         <Text style={styles.buttonText}>Verify Code</Text>
+                    )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.resendButton}
+                    onPress={handleResend}
+                    disabled={isResending || isLoading}
+                >
+                    {isResending ? (
+                        <ActivityIndicator color={Colors.primary} size="small" />
+                    ) : (
+                        <Text style={styles.resendText}>Didn't receive code? Resend</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -155,5 +209,14 @@ const styles = StyleSheet.create({
         color: Colors.textOnPrimary,
         fontSize: 16,
         fontWeight: '600',
+    },
+    resendButton: {
+        alignItems: 'center',
+        marginTop: 20,
+        padding: 10,
+    },
+    resendText: {
+        color: Colors.primary,
+        fontSize: 14,
     },
 });

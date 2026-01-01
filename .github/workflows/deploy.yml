@@ -1,0 +1,103 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/lightsail_key
+          chmod 600 ~/.ssh/lightsail_key
+          ssh-keyscan -H ${{ secrets.LIGHTSAIL_HOST }} >> ~/.ssh/known_hosts
+          
+      - name: Deploy backend via rsync
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/lightsail_key" \
+            --exclude '.git' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.env' \
+            --exclude 'media/' \
+            ./hamu_backend/ \
+            ubuntu@${{ secrets.LIGHTSAIL_HOST }}:/home/myProject/hamu_backend/
+            
+      - name: Run post-deploy commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            cd /home/myProject/hamu_backend
+            source /home/myProject/hamu/bin/activate
+            
+            # Install dependencies
+            pip install -r requirements.txt
+            
+            # Run migrations
+            python manage.py migrate --noinput
+            
+            # Collect static files
+            python manage.py collectstatic --noinput
+            
+            # Restart gunicorn
+            sudo systemctl restart gunicorn
+            
+            echo "Backend deployment complete!"
+
+  deploy-web:
+    name: Deploy Web Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/lightsail_key
+          chmod 600 ~/.ssh/lightsail_key
+          ssh-keyscan -H ${{ secrets.LIGHTSAIL_HOST }} >> ~/.ssh/known_hosts
+          
+      - name: Deploy web via rsync
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/lightsail_key" \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.env' \
+            ./hamu_web/ \
+            ubuntu@${{ secrets.LIGHTSAIL_HOST }}:/home/myProject/hamu_web/
+            
+      - name: Run post-deploy commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            cd /home/myProject/hamu_web
+            
+            # Install dependencies
+            npm install
+            
+            # Build for production
+            npm run build
+            
+            # Reload nginx if needed
+            sudo systemctl reload nginx || true
+            
+            echo "Web deployment complete!"

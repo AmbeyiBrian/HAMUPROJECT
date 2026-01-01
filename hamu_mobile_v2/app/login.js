@@ -1,5 +1,6 @@
 /**
- * Login Screen
+ * Login Screen - HAMU Water
+ * Clean, simple login with logo
  */
 import React, { useState } from 'react';
 import {
@@ -12,7 +13,10 @@ import {
     Platform,
     ActivityIndicator,
     Alert,
+    Image,
+    ScrollView,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../services/AuthContext';
 import Colors from '../constants/Colors';
@@ -50,51 +54,67 @@ export default function LoginScreen() {
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <View style={styles.header}>
-                <Text style={styles.title}>HAMU Water</Text>
-                <Text style={styles.subtitle}>Water Delivery Management</Text>
-            </View>
+            <StatusBar style="dark" />
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Logo Section */}
+                <View style={styles.logoContainer}>
+                    <Image
+                        source={require('../assets/hamu_logo.jpg')}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
+                    <Text style={styles.appName}>HAMU Water</Text>
+                </View>
 
-            <View style={styles.form}>
-                <Text style={styles.label}>Phone Number</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Enter phone number"
-                    placeholderTextColor={Colors.placeholder}
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                    editable={!isLoading}
-                />
+                {/* Login Form */}
+                <View style={styles.form}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Phone Number"
+                        placeholderTextColor="#999"
+                        value={phone}
+                        onChangeText={setPhone}
+                        keyboardType="phone-pad"
+                        autoCapitalize="none"
+                        editable={!isLoading}
+                    />
 
-                <Text style={styles.label}>Password</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Enter password"
-                    placeholderTextColor={Colors.placeholder}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    editable={!isLoading}
-                />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Password"
+                        placeholderTextColor="#999"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        editable={!isLoading}
+                    />
 
-                <TouchableOpacity
-                    style={[styles.button, isLoading && styles.buttonDisabled]}
-                    onPress={handleLogin}
-                    disabled={isLoading}
-                >
-                    {isLoading ? (
-                        <ActivityIndicator color={Colors.textOnPrimary} />
-                    ) : (
-                        <Text style={styles.buttonText}>Login</Text>
-                    )}
-                </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.loginButton, isLoading && styles.buttonDisabled]}
+                        onPress={handleLogin}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.loginButtonText}>Login</Text>
+                        )}
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={styles.forgotButton} onPress={() => router.push('/forgot-password')}>
-                    <Text style={styles.forgotText}>Forgot Password?</Text>
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                        style={styles.forgotButton}
+                        onPress={() => router.push('/forgot-password')}
+                    >
+                        <Text style={styles.forgotText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Footer */}
+                <Text style={styles.footer}>Version 3.0.0</Text>
+            </ScrollView>
         </KeyboardAvoidingView>
     );
 }
@@ -102,67 +122,67 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: '#fff',
     },
-    header: {
-        backgroundColor: Colors.primary,
-        paddingTop: 80,
-        paddingBottom: 40,
-        paddingHorizontal: 20,
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: Colors.textOnPrimary,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: Colors.textOnPrimary,
-        marginTop: 8,
-        opacity: 0.9,
-    },
-    form: {
-        flex: 1,
+    scrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
         padding: 24,
     },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: 8,
+    logoContainer: {
+        alignItems: 'center',
+        marginBottom: 40,
+    },
+    logo: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+    },
+    appName: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: Colors.primary,
         marginTop: 16,
+    },
+    form: {
+        width: '100%',
     },
     input: {
         borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 8,
-        padding: 14,
+        borderColor: '#ddd',
+        borderRadius: 12,
+        padding: 16,
         fontSize: 16,
-        backgroundColor: Colors.surface,
-        color: Colors.text,
+        backgroundColor: '#f9f9f9',
+        marginBottom: 16,
     },
-    button: {
+    loginButton: {
         backgroundColor: Colors.primary,
         padding: 16,
-        borderRadius: 8,
+        borderRadius: 12,
         alignItems: 'center',
-        marginTop: 32,
+        marginTop: 8,
     },
     buttonDisabled: {
         opacity: 0.7,
     },
-    buttonText: {
-        color: Colors.textOnPrimary,
-        fontSize: 16,
+    loginButtonText: {
+        color: '#fff',
+        fontSize: 18,
         fontWeight: '600',
     },
     forgotButton: {
         alignItems: 'center',
-        marginTop: 16,
+        marginTop: 20,
     },
     forgotText: {
         color: Colors.primary,
         fontSize: 14,
+    },
+    footer: {
+        textAlign: 'center',
+        color: '#999',
+        fontSize: 12,
+        marginTop: 40,
     },
 });

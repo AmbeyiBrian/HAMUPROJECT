@@ -189,17 +189,38 @@ class ApiService {
         );
     }
 
-    // ========== CUSTOMERS (Cache-First, but DO NOT overwrite from API) ==========
-    // Full customer cache is populated by exportCustomersForOffline()
-    // getCustomers just reads cache and does NOT sync page 1 to avoid overwriting
+    // ========== CUSTOMERS (Cache-First with Background Sync) ==========
+    // Like getLowStock - return cache immediately, fetch fresh in background
     async getCustomers(page = 1, filters = {}) {
+        // 1. Get cached customers immediately
         const cached = await cacheService.getCachedCustomers() || [];
 
-        // Don't trigger API sync here - it would overwrite full export with page 1 (50 items)
-        // The exportCustomersForOffline() handles full sync during preload
+        // 2. Start background fetch for fresh count (non-blocking)
+        const freshPromise = (async () => {
+            try {
+                // Try export endpoint for full customer list
+                const data = await this.fetch('customers/export_for_offline/');
+                const customers = data.results || data || [];
+                if (customers.length > 0) {
+                    await cacheService.cacheCustomers(customers);
+                }
+                return customers;
+            } catch (error) {
+                // If export fails, try regular customers endpoint
+                try {
+                    const data = await this.fetch('customers/');
+                    const customers = data.results || data || [];
+                    return customers;
+                } catch {
+                    return null; // Return null if all fetches fail
+                }
+            }
+        })();
+
         return {
             cached,
-            fresh: Promise.resolve(null),  // No fresh sync for customers
+            total: cached.length, // Provide total for dashboard
+            fresh: freshPromise,
         };
     }
 

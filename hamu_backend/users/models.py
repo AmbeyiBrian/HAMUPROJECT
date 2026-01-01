@@ -1,8 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin # Added PermissionsMixin
+from django.utils import timezone
 from shops.models import Shops
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 # --- accountsManager ---
 class AccountsManager(BaseUserManager): # Renamed to PascalCase
@@ -128,7 +129,7 @@ class PasswordResetCode(models.Model):
         code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         
         # Calculate expiry time
-        expires_at = datetime.now() + timedelta(minutes=expiry_minutes)
+        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
         
         # Create and save the new code
         reset_code = cls(
@@ -142,8 +143,8 @@ class PasswordResetCode(models.Model):
     
     def is_valid(self):
         """Check if the code is still valid (not expired, not used)"""
-        now = datetime.now()
-        return not self.is_used and now < self.expires_at.replace(tzinfo=None)
+        now = timezone.now()
+        return not self.is_used and now < self.expires_at
     
     def mark_as_used(self):
         """Mark this code as used"""

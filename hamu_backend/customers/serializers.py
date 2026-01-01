@@ -20,7 +20,8 @@ class CustomerSerializer(serializers.ModelSerializer):
             'packages', 'loyalty'
         ]
         extra_kwargs = {
-            'shop': {'write_only': True}
+            'shop': {'write_only': True},
+            'date_registered': {'required': False},  # Optional - defaults to now()
         }
     
     def create(self, validated_data):
@@ -30,6 +31,11 @@ class CustomerSerializer(serializers.ModelSerializer):
             existing = Customers.objects.filter(client_id=client_id).first()
             if existing:
                 return existing
+        
+        # Set date_registered to now() if not provided
+        if 'date_registered' not in validated_data or validated_data['date_registered'] is None:
+            validated_data['date_registered'] = timezone.now()
+        
         return super().create(validated_data)
 
     def get_packages(self, obj):

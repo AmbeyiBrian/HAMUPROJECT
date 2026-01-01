@@ -62,11 +62,12 @@ export default function DashboardScreen() {
                 lowStock: cachedLowStock.length,
             }));
 
-            // Get customers - read directly from cache (has ALL exported customers)
-            const allCachedCustomers = await cacheService.getCachedCustomers() || [];
+            // Get customers - cache-first pattern (like low stock)
+            const customersResult = await api.getCustomers();
+            const cachedCustomers = customersResult.cached || [];
             setMetrics(prev => ({
                 ...prev,
-                customers: allCachedCustomers.length,
+                customers: cachedCustomers.length,
             }));
 
             // Now wait for fresh data in background
@@ -84,6 +85,15 @@ export default function DashboardScreen() {
                 setMetrics(prev => ({
                     ...prev,
                     lowStock: freshLowStock.length,
+                }));
+            }
+
+            // Update customers with fresh data if available
+            const freshCustomers = await customersResult.fresh;
+            if (freshCustomers) {
+                setMetrics(prev => ({
+                    ...prev,
+                    customers: freshCustomers.length,
                 }));
             }
         } catch (error) {
@@ -271,13 +281,16 @@ export default function DashboardScreen() {
                         bgColor={Colors.surface}
                         onPress={() => router.push('/stock/add-log')}
                     />
-                    <QuickAction
-                        title="View Reports"
-                        icon="bar-chart"
-                        color={Colors.textSecondary}
-                        bgColor={Colors.surface}
-                        onPress={() => router.push('/analytics')}
-                    />
+                    {/* Analytics - Directors only */}
+                    {(user?.user_class === 'Director' || user?.user_class === 'DIRECTOR') && (
+                        <QuickAction
+                            title="View Reports"
+                            icon="bar-chart"
+                            color={Colors.textSecondary}
+                            bgColor={Colors.surface}
+                            onPress={() => router.push('/analytics')}
+                        />
+                    )}
                 </View>
 
                 <View style={styles.bottomSpacer} />
