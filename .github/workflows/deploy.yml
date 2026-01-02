@@ -81,6 +81,8 @@ jobs:
       - name: Build React app
         working-directory: ./hamu_web
         run: npm run build
+        env:
+          CI: false
         
       - name: Setup SSH key
         run: |
