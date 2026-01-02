@@ -95,13 +95,16 @@ jobs:
           script: |
             cd /home/myProject/hamu_web
             
+            # Fix ownership of build folder if owned by root
+            sudo chown -R ubuntu:ubuntu /home/myProject/hamu_web/
+            
             # Install dependencies
             npm install
             
             # Build for production
             npm run build
             
-            # Reload nginx if needed
-            sudo systemctl reload nginx || true
+            # Reload nginx
+            sudo systemctl reload nginx
             
             echo "Web deployment complete!"
