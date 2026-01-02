@@ -61,11 +61,26 @@ jobs:
   deploy-web:
     name: Deploy Web Frontend
     runs-on: ubuntu-latest
-    needs: deploy-backend  # Wait for backend to complete first
+    needs: deploy-backend
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: hamu_web/package-lock.json
+          
+      - name: Install dependencies
+        working-directory: ./hamu_web
+        run: npm ci
+        
+      - name: Build React app
+        working-directory: ./hamu_web
+        run: npm run build
         
       - name: Setup SSH key
         run: |
@@ -74,37 +89,19 @@ jobs:
           chmod 600 ~/.ssh/lightsail_key
           ssh-keyscan -H ${{ secrets.LIGHTSAIL_HOST }} >> ~/.ssh/known_hosts
           
-      - name: Deploy web via rsync
+      - name: Deploy build to server
         run: |
-          rsync -avz \
+          rsync -avz --delete \
             -e "ssh -i ~/.ssh/lightsail_key" \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '.env' \
-            --exclude 'build' \
-            --exclude 'deployed' \
-            ./hamu_web/ \
-            ubuntu@${{ secrets.LIGHTSAIL_HOST }}:/home/myProject/hamu_web/
+            ./hamu_web/build/ \
+            ubuntu@${{ secrets.LIGHTSAIL_HOST }}:/home/myProject/hamu_web/build/
             
-      - name: Run post-deploy commands
+      - name: Reload nginx
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ubuntu
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
-            cd /home/myProject/hamu_web
-            
-            # Fix ownership of build folder if owned by root
-            sudo chown -R ubuntu:ubuntu /home/myProject/hamu_web/
-            
-            # Install dependencies
-            npm install
-            
-            # Build for production
-            npm run build
-            
-            # Reload nginx
             sudo systemctl reload nginx
-            
             echo "Web deployment complete!"
