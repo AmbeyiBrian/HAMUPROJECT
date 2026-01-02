@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  IconButton, 
-  Box, 
-  Avatar, 
-  Menu, 
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Box,
+  Avatar,
+  Menu,
   MenuItem,
   Select,
   FormControl,
@@ -21,8 +21,8 @@ import {
   styled,
   Chip
 } from '@mui/material';
-import { 
-  Menu as MenuIcon, 
+import {
+  Menu as MenuIcon,
   AccountCircle,
   Logout,
   Settings,
@@ -92,61 +92,34 @@ const StyledLogoImg = styled('img')(({ theme }) => ({
 }));
 
 const AnimatedAppBar = styled(AppBar)(({ theme }) => ({
-  background: `linear-gradient(135deg, 
-    ${theme.palette.primary.main} 0%, 
-    ${theme.palette.primary.dark} 50%, 
-    ${alpha(theme.palette.primary.main, 0.9)} 100%)`,
-  backgroundSize: '300% 300%',
-  animation: `${gradientShift} 18s ease infinite`,
-  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.12)',
-  backdropFilter: 'blur(8px)',
-  borderBottom: `1px solid ${alpha('#fff', 0.1)}`,
-  transition: 'all 0.4s ease',
-  '&:hover': {
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.18)',
-    backgroundSize: '250% 250%',
-  }
+  backgroundColor: theme.palette.primary.main,
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
 }));
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
 }
 
-// Modern animated logo component
+// Static water icon (animations removed)
 const AnimatedWaterIcon = styled(WaterIcon)(({ theme }) => ({
   color: alpha('#fff', 0.9),
-  animation: `${wave} 5s ease-in-out infinite, ${colorFade} 8s ease-in-out infinite`,
   marginRight: theme.spacing(1.5),
   fontSize: '1.5rem',
-  position: 'relative',
   filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.3))',
-  transition: 'transform 0.3s ease',
-  '&:hover': {
-    transform: 'scale(1.2)',
-  },
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    borderRadius: '50%',
-    animation: `${shimmer} 4s infinite ease-in-out`,
-    zIndex: -1
-  }
 }));
 
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-  const [settingsAnchorEl, setSettingsAnchorEl] = React.useState<null | HTMLElement>(null);  const [mounted, setMounted] = useState(false);
+  const [settingsAnchorEl, setSettingsAnchorEl] = React.useState<null | HTMLElement>(null); const [mounted, setMounted] = useState(false);
   const navigate = useNavigate();
   const { shopId, setShopId, shops, isLoading } = useFilters();
   const theme = useTheme();
   const { user } = useUser();
-  
+
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
@@ -158,7 +131,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const handleShopChange = (event: SelectChangeEvent) => {
     setShopId(event.target.value);
   };
-  
+
   const handleLogout = () => {
     authService.logout();
     navigate('/login');
@@ -174,9 +147,9 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   };
   return (
     <AnimatedAppBar
-      position="fixed" 
+      position="fixed"
       elevation={0}
-      sx={{ 
+      sx={{
         zIndex: (theme) => theme.zIndex.drawer + 1,
         color: 'white',
       }}
@@ -187,8 +160,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           aria-label="open drawer"
           edge="start"
           onClick={onToggleSidebar}
-          sx={{ 
-            mr: 2, 
+          sx={{
+            mr: 2,
             display: { sm: 'none' },
             transition: 'transform 0.3s ease',
             '&:hover': {
@@ -198,9 +171,9 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         >
           <MenuIcon />
         </IconButton>
-          <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
           flexGrow: 1,
           '&:hover .header-title': {
             transform: 'translateX(3px)',
@@ -214,11 +187,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             alt="Business Logo"
           />
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography 
-              variant="h6" 
-              component="div" 
+            <Typography
+              variant="h6"
+              component="div"
               className="header-title"
-              sx={{ 
+              sx={{
                 fontWeight: 600,
                 letterSpacing: '0.8px',
                 color: 'white',
@@ -240,7 +213,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <FormControl
-            sx={{ 
+            sx={{
               minWidth: 180,
               position: 'relative',
               '&::after': {
@@ -328,7 +301,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 aria-haspopup="true"
                 onClick={handleSettingsMenu}
                 color="inherit"
-                sx={{ 
+                sx={{
                   backgroundColor: alpha('#fff', 0.1),
                   transition: 'all 0.3s ease',
                   '&:hover': {
@@ -341,7 +314,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 <AccountCircle />
               </IconButton>
             </Tooltip>
-              <SettingsMenu 
+            <SettingsMenu
               anchorEl={settingsAnchorEl}
               open={Boolean(settingsAnchorEl)}
               onClose={handleCloseSettingsMenu}

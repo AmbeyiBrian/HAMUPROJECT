@@ -23,13 +23,14 @@ jobs:
           
       - name: Deploy backend via rsync
         run: |
-          rsync -avz --delete \
+          rsync -avz \
             -e "ssh -i ~/.ssh/lightsail_key" \
             --exclude '.git' \
             --exclude '__pycache__' \
             --exclude '*.pyc' \
             --exclude '.env' \
             --exclude 'media/' \
+            --exclude 'staticfiles/' \
             ./hamu_backend/ \
             ubuntu@${{ secrets.LIGHTSAIL_HOST }}:/home/myProject/hamu_backend/
             
@@ -60,6 +61,7 @@ jobs:
   deploy-web:
     name: Deploy Web Frontend
     runs-on: ubuntu-latest
+    needs: deploy-backend  # Wait for backend to complete first
     
     steps:
       - name: Checkout code

@@ -1,14 +1,14 @@
 import React from 'react';
-import { 
-  Paper, 
-  Typography, 
-  Box, 
+import {
+  Paper,
+  Typography,
+  Box,
   SvgIconProps,
   Tooltip,
   useTheme,
   alpha
 } from '@mui/material';
-import { 
+import {
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
@@ -39,16 +39,16 @@ const StatCard: React.FC<StatCardProps> = ({
   const isPositiveChange = percentChange && percentChange > 0;
   const isNegativeChange = percentChange && percentChange < 0;
   const theme = useTheme();
-  
+
   // Use theme colors if no custom colors are provided
   const effectiveIconColor = iconColor || theme.palette.primary.main;
   const effectiveBgColor = bgcolor || theme.palette.background.paper;
-  
+
   return (
     <Paper
       elevation={0}
-      sx={{ 
-        p: 3, 
+      sx={{
+        p: 3,
         backgroundColor: effectiveBgColor,
         borderRadius: 3,
         border: `1px solid ${alpha(theme.palette.primary.main, 0.08)}`,
@@ -63,9 +63,9 @@ const StatCard: React.FC<StatCardProps> = ({
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
         <Box>
-          <Typography 
-            variant="subtitle2" 
-            sx={{ 
+          <Typography
+            variant="subtitle2"
+            sx={{
               color: theme.palette.text.secondary,
               fontWeight: 500,
               fontSize: '0.875rem',
@@ -74,10 +74,10 @@ const StatCard: React.FC<StatCardProps> = ({
           >
             {title}
           </Typography>
-          <Typography 
-            variant="h4" 
-            component="div" 
-            sx={{ 
+          <Typography
+            variant="h4"
+            component="div"
+            sx={{
               fontWeight: 700,
               color: theme.palette.text.primary,
               mb: 1
@@ -86,24 +86,24 @@ const StatCard: React.FC<StatCardProps> = ({
           >
             {valuePrefix}{typeof value === 'number' ? value.toLocaleString() : value}{valueSuffix}
           </Typography>
-          
+
           {percentChange !== undefined && (
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
               <Tooltip title={changeLabel}>
                 <Box
-                  sx={{ 
+                  sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    backgroundColor: isPositiveChange 
+                    backgroundColor: isPositiveChange
                       ? alpha(theme.palette.success.main, 0.12)
-                      : isNegativeChange 
-                      ? alpha(theme.palette.error.main, 0.12)
-                      : alpha(theme.palette.grey[500], 0.12),
-                    color: isPositiveChange 
+                      : isNegativeChange
+                        ? alpha(theme.palette.error.main, 0.12)
+                        : alpha(theme.palette.grey[500], 0.12),
+                    color: isPositiveChange
                       ? theme.palette.success.main
-                      : isNegativeChange 
-                      ? theme.palette.error.main
-                      : theme.palette.grey[600],
+                      : isNegativeChange
+                        ? theme.palette.error.main
+                        : theme.palette.grey[600],
                     borderRadius: 10,
                     px: 1,
                     py: 0.25
@@ -116,8 +116,8 @@ const StatCard: React.FC<StatCardProps> = ({
                   </Typography>
                 </Box>
               </Tooltip>
-              <Typography 
-                variant="caption" 
+              <Typography
+                variant="caption"
                 color="text.secondary"
                 sx={{ ml: 1, fontSize: '0.75rem' }}
               >
@@ -126,19 +126,18 @@ const StatCard: React.FC<StatCardProps> = ({
             </Box>
           )}
         </Box>
-        
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
-            background: `linear-gradient(135deg, ${alpha(effectiveIconColor, 0.15)} 0%, ${alpha(effectiveIconColor, 0.25)} 100%)`,
+            backgroundColor: alpha(effectiveIconColor, 0.12),
             color: effectiveIconColor,
             borderRadius: '12px',
             width: 56,
             height: 56,
             p: 1.5,
-            boxShadow: `0 4px 10px ${alpha(effectiveIconColor, 0.15)}`
           }}
         >
           {React.cloneElement(icon, { fontSize: 'large' })}

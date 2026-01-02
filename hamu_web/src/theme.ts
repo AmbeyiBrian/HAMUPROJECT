@@ -97,9 +97,9 @@ const oceanBlueTheme = createTheme({
           fontWeight: 600
         },
         containedPrimary: {
-          background: `linear-gradient(135deg, ${oceanBlueColors.primary.main} 0%, ${oceanBlueColors.primary.dark} 100%)`,
+          backgroundColor: oceanBlueColors.primary.main,
           '&:hover': {
-            background: `linear-gradient(135deg, ${oceanBlueColors.primary.dark} 0%, ${oceanBlueColors.primary.main} 100%)`
+            backgroundColor: oceanBlueColors.primary.dark
           }
         }
       }
