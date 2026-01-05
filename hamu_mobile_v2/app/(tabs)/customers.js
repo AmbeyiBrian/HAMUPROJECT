@@ -84,7 +84,8 @@ export default function CustomersScreen() {
         const nameMatch = (c.names || '').toLowerCase().includes(query);
         const phoneMatch = (c.phone_number || '').toLowerCase().includes(query);
         const locationMatch = (c.apartment_name || '').toLowerCase().includes(query);
-        return nameMatch || phoneMatch || locationMatch;
+        const shopMatch = (c.shop_details?.shopName || '').toLowerCase().includes(query);
+        return nameMatch || phoneMatch || locationMatch || shopMatch;
       });
     }
 
@@ -109,33 +110,89 @@ export default function CustomersScreen() {
     }
   };
 
+  // Activity status colors matching the web app
+  const STATUS_COLORS = {
+    'Very Active': '#1a73e8', // Blue
+    'Active': '#43a047',      // Green
+    'Irregular': '#fb8c00',   // Orange
+    'Inactive': '#e53935',    // Red
+    'New': '#9c27b0',         // Purple
+  };
+
+  // Helper function to get activity status (from API or calculate from cached data)
+  const getActivityStatus = (customer) => {
+    // First check the activity_status from the API
+    if (customer.activity_status) {
+      return customer.activity_status;
+    }
+
+    // Fallback: calculate from refill data or date_registered for cached data
+    // If we have refill data, we could calculate, but for simplicity, 
+    // use date_registered to at least identify "New" customers
+    if (customer.date_registered) {
+      const registrationDate = new Date(customer.date_registered);
+      const now = new Date();
+      const daysSinceRegistration = Math.floor((now - registrationDate) / (1000 * 60 * 60 * 24));
+
+      // If recently registered and no/few refills, likely "New"
+      if (daysSinceRegistration <= 30 && (!customer.refill_count || customer.refill_count <= 3)) {
+        return 'New';
+      }
+    }
+
+    // Default to null (don't show badge) if we can't determine status
+    return null;
+  };
+
   const getAvatarColor = (name) => {
     const colors = [Colors.primary, Colors.secondary, Colors.waterDark, Colors.info, Colors.success];
     return colors[(name?.charCodeAt(0) || 0) % colors.length];
   };
 
-  const renderCustomer = ({ item }) => (
-    <TouchableOpacity
-      style={styles.customerCard}
-      onPress={() => router.push(`/customer/${item.id}`)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.avatar, { backgroundColor: getAvatarColor(item.names) }]}>
-        <Text style={styles.avatarText}>{item.names?.[0]?.toUpperCase() || '?'}</Text>
-      </View>
-      <View style={styles.customerInfo}>
-        <Text style={styles.customerName}>{item.names}</Text>
-        <Text style={styles.customerPhone}>{item.phone_number}</Text>
-        {item.apartment_name && (
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={12} color={Colors.textLight} />
-            <Text style={styles.customerAddress}>{item.apartment_name} {item.room_number}</Text>
+  const renderCustomer = ({ item }) => {
+    const activityStatus = getActivityStatus(item);
+    const statusColor = activityStatus ? STATUS_COLORS[activityStatus] : null;
+
+    return (
+      <TouchableOpacity
+        style={styles.customerCard}
+        onPress={() => router.push(`/customer/${item.id}`)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.avatar, { backgroundColor: getAvatarColor(item.names) }]}>
+          <Text style={styles.avatarText}>{item.names?.[0]?.toUpperCase() || '?'}</Text>
+        </View>
+        <View style={styles.customerInfo}>
+          <View style={styles.customerNameRow}>
+            <Text style={styles.customerName}>{item.names}</Text>
+            {activityStatus && statusColor && (
+              <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                <Text style={styles.statusBadgeText}>{activityStatus}</Text>
+              </View>
+            )}
           </View>
-        )}
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-    </TouchableOpacity>
-  );
+          <Text style={styles.customerPhone}>{item.phone_number}</Text>
+          <View style={styles.locationRow}>
+            {item.apartment_name && (
+              <>
+                <Ionicons name="location-outline" size={12} color={Colors.textLight} />
+                <Text style={styles.customerAddress}>{item.apartment_name} {item.room_number}</Text>
+              </>
+            )}
+            {item.shop_details?.shopName && (
+              <>
+                {item.apartment_name && <Text style={styles.separator}>•</Text>}
+                <Ionicons name="storefront-outline" size={12} color={Colors.textLight} />
+                <Text style={styles.shopName}>{item.shop_details.shopName}</Text>
+              </>
+            )}
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+      </TouchableOpacity>
+    );
+  };
+
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -198,10 +255,15 @@ const styles = StyleSheet.create({
   avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
   customerInfo: { flex: 1, marginLeft: 14 },
+  customerNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   customerName: { fontSize: 16, fontWeight: '600', color: Colors.text },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 },
+  statusBadgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   customerPhone: { fontSize: 14, color: Colors.primary, marginTop: 2 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4, flexWrap: 'wrap' },
   customerAddress: { fontSize: 12, color: Colors.textLight },
+  separator: { fontSize: 12, color: Colors.textLight, marginHorizontal: 4 },
+  shopName: { fontSize: 12, color: Colors.textLight },
   footerLoader: { padding: 16, alignItems: 'center' },
   emptyContainer: { alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 16, color: Colors.textLight, marginTop: 12 },

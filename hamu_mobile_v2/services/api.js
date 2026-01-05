@@ -192,8 +192,19 @@ class ApiService {
     // ========== CUSTOMERS (Cache-First with Background Sync) ==========
     // Like getLowStock - return cache immediately, fetch fresh in background
     async getCustomers(page = 1, filters = {}) {
-        // 1. Get cached customers immediately
-        const cached = await cacheService.getCachedCustomers() || [];
+        // Helper to filter customers by shop
+        const filterByShop = (customers) => {
+            if (!filters.shop || !Array.isArray(customers)) return customers;
+            const shopId = String(filters.shop);
+            return customers.filter(c =>
+                String(c.shop) === shopId ||
+                String(c.shop_details?.id) === shopId
+            );
+        };
+
+        // 1. Get cached customers immediately (filtered by shop if needed)
+        const allCached = await cacheService.getCachedCustomers() || [];
+        const cached = filterByShop(allCached);
 
         // 2. Start background fetch for fresh count (non-blocking)
         const freshPromise = (async () => {
@@ -204,13 +215,13 @@ class ApiService {
                 if (customers.length > 0) {
                     await cacheService.cacheCustomers(customers);
                 }
-                return customers;
+                return filterByShop(customers);
             } catch (error) {
                 // If export fails, try regular customers endpoint
                 try {
                     const data = await this.fetch('customers/');
                     const customers = data.results || data || [];
-                    return customers;
+                    return filterByShop(customers);
                 } catch {
                     return null; // Return null if all fetches fail
                 }

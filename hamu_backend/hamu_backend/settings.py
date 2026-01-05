@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-+=0@plt%71#_)8qd)adu7-y_ajc!jnair9rx&tx%^!apnkuvb&'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 # Fixed the ALLOWED_HOSTS format - each host should be a separate string
 ALLOWED_HOSTS = [
@@ -38,6 +38,7 @@ ALLOWED_HOSTS = [
     '16.170.121.206',
     # Local development
     '192.169.0.102',
+    '10.5.4.36',
     '192.169.0.102:8000',
     'localhost:3000',
     'localhost:8000',

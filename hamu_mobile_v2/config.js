@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = 'https://api.hamuwater.com/api';
-// const API_BASE_URL = 'http://192.169.0.102:8000/api';
+// const API_BASE_URL = 'http://10.5.4.36:8000/api';
 
 export default {
     API_BASE_URL,

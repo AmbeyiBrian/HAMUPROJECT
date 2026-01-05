@@ -85,6 +85,24 @@ class CustomerViewSet(viewsets.ModelViewSet):
             # (if repaid more than owed, or received loyalty/refund credits)
             credit_balance = total_repaid - total_credit_owed
             
+            # Calculate activity status based on last refill
+            from django.utils import timezone
+            activity_status = 'Inactive'
+            if last_refill:
+                days_since_last_refill = (timezone.now() - last_refill.created_at).days
+                if days_since_last_refill <= 30:
+                    activity_status = 'Very Active'
+                elif days_since_last_refill <= 60:
+                    activity_status = 'Active'
+                elif days_since_last_refill <= 90:
+                    activity_status = 'Irregular'
+                else:
+                    activity_status = 'Inactive'
+            elif customer.date_registered:
+                days_since_registration = (timezone.now() - customer.date_registered).days
+                if days_since_registration <= 30:
+                    activity_status = 'New'
+            
             customers.append({
                 'id': customer.id,
                 'names': customer.names,
@@ -96,6 +114,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 'shop': customer.shop_id,
                 'refill_count': refill_count,
                 'credit_balance': credit_balance,  # Positive = customer has balance to use
+                'activity_status': activity_status,  # Activity status for badges
                 'loyalty': {
                     'current_points': current_points,
                     'refills_until_free': refills_until_free,

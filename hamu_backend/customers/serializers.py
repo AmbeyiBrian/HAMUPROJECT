@@ -11,13 +11,14 @@ class CustomerSerializer(serializers.ModelSerializer):
     packages = serializers.SerializerMethodField()
     loyalty = serializers.SerializerMethodField()
     client_id = serializers.UUIDField(required=False, allow_null=True)
+    activity_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Customers
         fields = [
             'id', 'client_id', 'shop', 'shop_details', 'names', 'phone_number', 
             'apartment_name', 'room_number', 'date_registered', 'refill_count',
-            'packages', 'loyalty'
+            'packages', 'loyalty', 'activity_status'
         ]
         extra_kwargs = {
             'shop': {'write_only': True},
@@ -143,6 +144,35 @@ class CustomerSerializer(serializers.ModelSerializer):
             'free_refills_redeemed': free_refills_redeemed
         }
     
+    def get_activity_status(self, obj):
+        """
+        Calculate activity status based on most recent refill date.
+        Returns one of: 'Very Active', 'Active', 'Irregular', 'Inactive', 'New'
+        """
+        # Get the most recent refill for this customer
+        latest_refill = None
+        if hasattr(obj, 'refills'):
+            latest_refill = obj.refills.order_by('-created_at').first()
+        
+        if not latest_refill:
+            # No refills - check if it's a new customer (registered within last 30 days)
+            if obj.date_registered:
+                days_since_registration = (timezone.now() - obj.date_registered).days
+                if days_since_registration <= 30:
+                    return 'New'
+            return 'Inactive'
+        
+        # Calculate days since last refill
+        days_since_last_refill = (timezone.now() - latest_refill.created_at).days
+        
+        if days_since_last_refill <= 30:
+            return 'Very Active'
+        elif days_since_last_refill <= 60:
+            return 'Active'
+        elif days_since_last_refill <= 90:
+            return 'Irregular'
+        else:
+            return 'Inactive'
 
 class CustomerLightSerializer(serializers.ModelSerializer):
     """A lightweight serializer for Customers with minimal fields."""

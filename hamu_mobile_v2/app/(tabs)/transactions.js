@@ -87,6 +87,7 @@ export default function TransactionsScreen() {
         if (filters.search && filters.search.trim()) {
             const query = filters.search.toLowerCase().trim();
             result = result.filter(t =>
+                (t.customer_details?.names || '').toLowerCase().includes(query) ||
                 (t.customer_name || '').toLowerCase().includes(query) ||
                 (t.agent_name || '').toLowerCase().includes(query)
             );
@@ -140,7 +141,7 @@ export default function TransactionsScreen() {
                         </View>
                     )}
                 </View>
-                <Text style={styles.customerName}>{item.customer_name || 'Walk-in'}</Text>
+                <Text style={styles.customerName}>{item.customer_details?.names || item.customer_name || 'Walk-in'}</Text>
                 <Text style={styles.transactionDate}>{formatDate(item.date)}</Text>
             </View>
             <View style={styles.amountContainer}>
