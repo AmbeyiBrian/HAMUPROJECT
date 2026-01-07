@@ -7,6 +7,7 @@ import {
     View,
     Text,
     ScrollView,
+    FlatList,
     StyleSheet,
     ActivityIndicator,
     TouchableOpacity,
@@ -40,6 +41,14 @@ export default function CustomerDetailScreen() {
     const [activeTab, setActiveTab] = useState('refills');
     const [creditBalance, setCreditBalance] = useState(0);
 
+    // Pagination state
+    const [hasMoreRefills, setHasMoreRefills] = useState(false);
+    const [hasMoreCredits, setHasMoreCredits] = useState(false);
+    const [refillsPage, setRefillsPage] = useState(1);
+    const [creditsPage, setCreditsPage] = useState(1);
+    const [loadingMoreRefills, setLoadingMoreRefills] = useState(false);
+    const [loadingMoreCredits, setLoadingMoreCredits] = useState(false);
+
     // SMS Modal
     const [showSMSModal, setShowSMSModal] = useState(false);
     const [smsMessage, setSmsMessage] = useState('');
@@ -56,25 +65,50 @@ export default function CustomerDetailScreen() {
             setCustomer(customerData);
             setIsLoading(false); // Show customer immediately
 
-            // Get refills (cache-first)
-            const refillsResult = await api.getRefills(1, { customer: id });
-            const cachedRefills = refillsResult.cached || [];
-            setRefills(cachedRefills);
+            // Use backend-provided credit info - ALWAYS trust the backend calculation
+            // customer-insights returns credit.credit_balance (same convention as export_for_offline)
+            // Positive = customer has credit (overpaid)
+            // Negative = customer owes money (debt)
+            if (typeof customerData.credit?.credit_balance === 'number') {
+                // Use credit_balance directly (same as export_for_offline)
+                setCreditBalance(customerData.credit.credit_balance);
+            } else if (customerData.credit?.outstanding !== undefined) {
+                // Fallback: negate outstanding (for older API versions)
+                setCreditBalance(-customerData.credit.outstanding);
+            } else if (typeof customerData.credit_balance === 'number') {
+                // From export_for_offline cache
+                setCreditBalance(customerData.credit_balance);
+            }
+            // Note: We no longer calculate credit manually - backend has the accurate data
 
-            // Wait for fresh refills
-            const freshRefills = await refillsResult.fresh;
-            if (freshRefills) setRefills(freshRefills);
+            // Fetch refills for display (paginated - first page)
+            try {
+                const refillsData = await api.fetch(`refills/?customer=${id}`);
+                const customerRefills = refillsData.results || refillsData || [];
+                setRefills(customerRefills);
+                // Store if there are more refills to load
+                if (refillsData.next) {
+                    setHasMoreRefills(true);
+                }
 
-            // Get credits (cache-first) 
-            const creditsResult = await api.getCredits(1, { customer: id });
-            const cachedCredits = creditsResult.cached || [];
-            setCredits(cachedCredits);
-            calculateCreditBalance(cachedRefills, cachedCredits);
+                // Fetch credits for display (paginated - first page)
+                const creditsData = await api.fetch(`credits/?customer=${id}`);
+                const customerCredits = creditsData.results || creditsData || [];
+                setCredits(customerCredits);
+                // Store if there are more credits to load
+                if (creditsData.next) {
+                    setHasMoreCredits(true);
+                }
+            } catch (fetchError) {
+                // Offline fallback - use filtered global cache
+                console.log('[CustomerDetail] Offline, using cache fallback');
+                const refillsResult = await api.getRefills(1, { customer: id });
+                const cachedRefills = refillsResult.cached || [];
+                setRefills(cachedRefills);
 
-            const freshCredits = await creditsResult.fresh;
-            if (freshCredits) {
-                setCredits(freshCredits);
-                calculateCreditBalance(freshRefills || cachedRefills, freshCredits);
+                const creditsResult = await api.getCredits(1, { customer: id });
+                const cachedCredits = creditsResult.cached || [];
+                setCredits(cachedCredits);
             }
         } catch (error) {
             console.error('[CustomerDetail] Load error:', error);
@@ -84,22 +118,74 @@ export default function CustomerDetailScreen() {
         }
     }, [id]);
 
+    // Calculate credit balance matching backend convention:
+    // total_repaid - total_owed = credit_balance
+    // Positive = customer has credit (overpaid)
+    // Negative = customer owes money (debt)
     const calculateCreditBalance = (refillsList, creditsList) => {
-        let totalCreditRefills = 0;
-        let totalCreditPayments = 0;
+        let totalOwed = 0;  // What customer owes (CREDIT refills)
+        let totalRepaid = 0;  // What customer paid back (credit payments)
+
         refillsList.forEach(r => {
-            if (r.payment_mode === 'CREDIT' && r.cost) totalCreditRefills += parseFloat(r.cost);
+            if (r.payment_mode === 'CREDIT' && r.cost) totalOwed += parseFloat(r.cost);
         });
         creditsList.forEach(c => {
-            if (c.money_paid) totalCreditPayments += parseFloat(c.money_paid);
+            if (c.money_paid) totalRepaid += parseFloat(c.money_paid);
         });
-        setCreditBalance(totalCreditRefills - totalCreditPayments);
+
+        // Match backend: repaid - owed
+        // Positive = credit, Negative = debt
+        setCreditBalance(totalRepaid - totalOwed);
     };
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
+        setRefillsPage(1);
+        setCreditsPage(1);
+        setHasMoreRefills(false);
+        setHasMoreCredits(false);
         loadCustomerData();
     }, [loadCustomerData]);
+
+    // Load more refills on scroll
+    const loadMoreRefills = async () => {
+        if (loadingMoreRefills || !hasMoreRefills) return;
+        setLoadingMoreRefills(true);
+        try {
+            const nextPage = refillsPage + 1;
+            const data = await api.fetch(`refills/?customer=${id}&page=${nextPage}`);
+            const moreRefills = data.results || data || [];
+            if (moreRefills.length > 0) {
+                setRefills(prev => [...prev, ...moreRefills]);
+                setRefillsPage(nextPage);
+            }
+            setHasMoreRefills(!!data.next);
+        } catch (error) {
+            console.log('[CustomerDetail] Load more refills error:', error);
+        } finally {
+            setLoadingMoreRefills(false);
+        }
+    };
+
+    // Load more credits on scroll
+    const loadMoreCredits = async () => {
+        if (loadingMoreCredits || !hasMoreCredits) return;
+        setLoadingMoreCredits(true);
+        try {
+            const nextPage = creditsPage + 1;
+            const data = await api.fetch(`credits/?customer=${id}&page=${nextPage}`);
+            const moreCredits = data.results || data || [];
+            if (moreCredits.length > 0) {
+                setCredits(prev => [...prev, ...moreCredits]);
+                setCreditsPage(nextPage);
+            }
+            setHasMoreCredits(!!data.next);
+        } catch (error) {
+            console.log('[CustomerDetail] Load more credits error:', error);
+        } finally {
+            setLoadingMoreCredits(false);
+        }
+    };
 
     const handleCall = () => customer?.phone_number && Linking.openURL(`tel:${customer.phone_number}`);
 
@@ -195,13 +281,13 @@ export default function CustomerDetailScreen() {
                         <Text style={styles.statValue}>{totalRefills}</Text>
                         <Text style={styles.statLabel}>Refills</Text>
                     </View>
-                    <View style={[styles.statCard, creditBalance > 0 && styles.debtCard]}>
-                        <Text style={[styles.statValue, creditBalance > 0 ? styles.debtText : creditBalance < 0 ? styles.creditText : {}]}>
+                    <View style={[styles.statCard, creditBalance < 0 && styles.debtCard]}>
+                        <Text style={[styles.statValue, creditBalance < 0 ? styles.debtText : creditBalance > 0 ? styles.creditText : {}]}>
                             {formatCurrency(creditBalance)}
                         </Text>
                         {creditBalance !== 0 && (
-                            <Text style={[styles.balanceStatus, creditBalance > 0 ? styles.debtText : styles.creditText]}>
-                                {creditBalance > 0 ? 'OWES' : 'CREDIT'}
+                            <Text style={[styles.balanceStatus, creditBalance < 0 ? styles.debtText : styles.creditText]}>
+                                {creditBalance < 0 ? 'OWES' : 'CREDIT'}
                             </Text>
                         )}
                         <Text style={styles.statLabel}>Balance</Text>
@@ -248,50 +334,78 @@ export default function CustomerDetailScreen() {
                 {/* Transaction List */}
                 <View style={styles.listContainer}>
                     {activeTab === 'refills' ? (
-                        refills.length > 0 ? refills.map(r => (
-                            <View key={r.id} style={styles.txItem}>
-                                <View>
-                                    <Text style={styles.txDate}>{formatDate(r.created_at)}</Text>
-                                    <Text style={styles.txAgent}>{r.agent_name || 'Unknown'}</Text>
-                                </View>
-                                <View style={styles.txRight}>
-                                    <Text style={styles.txAmount}>{formatCurrency(r.cost)}</Text>
-                                    <View style={[styles.txBadge, {
-                                        backgroundColor: r.payment_mode === 'CREDIT' ? Colors.warning :
-                                            r.payment_mode === 'FREE' ? Colors.info : Colors.success
-                                    }]}>
-                                        <Text style={styles.txBadgeText}>{r.payment_mode || 'PAID'}</Text>
+                        <FlatList
+                            data={refills}
+                            keyExtractor={(item, index) => item?.id ? `refill-${item.id}` : `index-${index}`}
+                            renderItem={({ item: r }) => (
+                                <View style={styles.txItem}>
+                                    <View>
+                                        <Text style={styles.txDate}>{formatDate(r.created_at)}</Text>
+                                        <Text style={styles.txAgent}>{r.agent_name || 'Unknown'}</Text>
+                                    </View>
+                                    <View style={styles.txRight}>
+                                        <Text style={styles.txAmount}>{formatCurrency(r.cost)}</Text>
+                                        <View style={[styles.txBadge, {
+                                            backgroundColor: r.payment_mode === 'CREDIT' ? Colors.warning :
+                                                r.payment_mode === 'FREE' ? Colors.info : Colors.success
+                                        }]}>
+                                            <Text style={styles.txBadgeText}>{r.payment_mode || 'PAID'}</Text>
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
-                        )) : (
-                            <View style={styles.emptyList}>
-                                <Ionicons name="water-outline" size={32} color={Colors.textLight} />
-                                <Text style={styles.emptyText}>No refills yet</Text>
-                            </View>
-                        )
+                            )}
+                            onEndReached={loadMoreRefills}
+                            onEndReachedThreshold={0.3}
+                            ListEmptyComponent={
+                                <View style={styles.emptyList}>
+                                    <Ionicons name="water-outline" size={32} color={Colors.textLight} />
+                                    <Text style={styles.emptyText}>No refills yet</Text>
+                                </View>
+                            }
+                            ListFooterComponent={
+                                loadingMoreRefills ? (
+                                    <ActivityIndicator size="small" color={Colors.primary} style={{ padding: 10 }} />
+                                ) : hasMoreRefills ? (
+                                    <Text style={styles.loadMoreText}>Scroll for more...</Text>
+                                ) : null
+                            }
+                        />
                     ) : (
-                        credits.length > 0 ? credits.map(c => (
-                            <View key={c.id} style={styles.txItem}>
-                                <View>
-                                    <Text style={styles.txDate}>{formatDate(c.payment_date || c.created_at)}</Text>
-                                    <Text style={styles.txAgent}>{c.agent_name || 'Unknown'}</Text>
-                                </View>
-                                <View style={styles.txRight}>
-                                    <Text style={[styles.txAmount, { color: Colors.success }]}>
-                                        +{formatCurrency(c.money_paid)}
-                                    </Text>
-                                    <View style={[styles.txBadge, { backgroundColor: Colors.success }]}>
-                                        <Text style={styles.txBadgeText}>{c.payment_mode || 'CASH'}</Text>
+                        <FlatList
+                            data={credits}
+                            keyExtractor={(item, index) => item?.id ? `credit-${item.id}` : `index-${index}`}
+                            renderItem={({ item: c }) => (
+                                <View style={styles.txItem}>
+                                    <View>
+                                        <Text style={styles.txDate}>{formatDate(c.payment_date || c.created_at)}</Text>
+                                        <Text style={styles.txAgent}>{c.agent_name || 'Unknown'}</Text>
+                                    </View>
+                                    <View style={styles.txRight}>
+                                        <Text style={[styles.txAmount, { color: Colors.success }]}>
+                                            +{formatCurrency(c.money_paid)}
+                                        </Text>
+                                        <View style={[styles.txBadge, { backgroundColor: Colors.success }]}>
+                                            <Text style={styles.txBadgeText}>{c.payment_mode || 'CASH'}</Text>
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
-                        )) : (
-                            <View style={styles.emptyList}>
-                                <Ionicons name="card-outline" size={32} color={Colors.textLight} />
-                                <Text style={styles.emptyText}>No payments yet</Text>
-                            </View>
-                        )
+                            )}
+                            onEndReached={loadMoreCredits}
+                            onEndReachedThreshold={0.3}
+                            ListEmptyComponent={
+                                <View style={styles.emptyList}>
+                                    <Ionicons name="card-outline" size={32} color={Colors.textLight} />
+                                    <Text style={styles.emptyText}>No payments yet</Text>
+                                </View>
+                            }
+                            ListFooterComponent={
+                                loadingMoreCredits ? (
+                                    <ActivityIndicator size="small" color={Colors.primary} style={{ padding: 10 }} />
+                                ) : hasMoreCredits ? (
+                                    <Text style={styles.loadMoreText}>Scroll for more...</Text>
+                                ) : null
+                            }
+                        />
                     )}
                 </View>
 
@@ -428,6 +542,7 @@ const styles = StyleSheet.create({
     txBadgeText: { fontSize: 9, fontWeight: '600', color: '#fff' },
     emptyList: { alignItems: 'center', paddingVertical: 30 },
     emptyText: { fontSize: 13, color: Colors.textLight, marginTop: 8 },
+    loadMoreText: { fontSize: 12, color: Colors.textSecondary, textAlign: 'center', padding: 10 },
 
     // Notes
     notesBox: { marginHorizontal: 16, marginTop: 16, backgroundColor: Colors.surface, borderRadius: 10, padding: 12 },

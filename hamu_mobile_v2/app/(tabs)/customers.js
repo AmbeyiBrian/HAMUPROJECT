@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, StatusBar,
+  ActivityIndicator, RefreshControl, StatusBar, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,16 +27,54 @@ export default function CustomersScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // New filters for status and debt
+  const [activeStatusFilter, setActiveStatusFilter] = useState('all');
+  const [debtFilter, setDebtFilter] = useState('all');
+
+  // CRITICAL: Refs to prevent infinite loops
+  const hasInitiallyLoaded = React.useRef(false);
+  const isLoadingRef = React.useRef(false);
+  const prevShopRef = React.useRef(filters.shop);
+
+  // Load customer data ONLY once on mount
   useEffect(() => {
-    loadCustomers(1, true);
+    if (!hasInitiallyLoaded.current) {
+      loadCustomers(1, true);
+    }
+  }, []);
+
+  // Reload ONLY when shop filter actually changes (user action)
+  useEffect(() => {
+    if (hasInitiallyLoaded.current && prevShopRef.current !== filters.shop) {
+      prevShopRef.current = filters.shop;
+      loadCustomers(1, true);
+    }
   }, [filters.shop]);
 
+  // Apply client-side filters (no API calls)
   useEffect(() => {
     applyFilters();
-  }, [customers, filters.search, filters.startDate, filters.endDate]);
+  }, [customers, filters.search, filters.startDate, filters.endDate, activeStatusFilter, debtFilter]);
+
+  // Helper to deduplicate customers by ID
+  const deduplicateCustomers = React.useCallback((customerList) => {
+    const seen = new Map();
+    (customerList || []).forEach(c => {
+      if (c && c.id) seen.set(c.id, c);
+    });
+    return Array.from(seen.values());
+  }, []);
 
   async function loadCustomers(pageNum = 1, reset = false) {
-    if (loadingMore && !reset) return;
+    // Prevent concurrent/duplicate calls
+    if (isLoadingRef.current) {
+      console.log('[Customers] Skipping - already loading');
+      return;
+    }
+    if (!reset && loadingMore) return;
+
+    isLoadingRef.current = true;
+    console.log('[Customers] Starting load, page:', pageNum, 'reset:', reset);
 
     try {
       if (pageNum > 1) setLoadingMore(true);
@@ -44,40 +82,55 @@ export default function CustomersScreen() {
       const filterParams = {};
       if (filters.shop) filterParams.shop = filters.shop;
 
-      // Cache-first pattern
+      // Cache-first pattern - get cached immediately
       const { cached, fresh } = await api.getCustomers(pageNum, filterParams);
 
-      // Show cached immediately
-      if (reset && cached.length > 0) {
-        setCustomers(cached);
+      // Show cached data immediately
+      const hasCachedData = cached && cached.length > 0;
+      if (reset && hasCachedData) {
+        setCustomers(deduplicateCustomers(cached));
         setIsLoading(false);
       }
 
-      // Wait for fresh data
-      setIsSyncing(true);
-      const freshData = await fresh;
-      if (freshData) {
-        if (reset) {
-          setCustomers(freshData);
-        } else {
-          setCustomers(prev => [...prev, ...freshData]);
-        }
-        setHasMore(freshData.length >= 20);
+      // Mark as loaded (prevents future automatic loads)
+      hasInitiallyLoaded.current = true;
+
+      // Only show syncing if no cached data
+      if (!hasCachedData) {
+        setIsSyncing(true);
       }
+
+      // Handle fresh data WITHOUT blocking or triggering re-renders that cause loops
+      fresh
+        .then(freshData => {
+          if (freshData && freshData.length > 0) {
+            setCustomers(prev => reset ? deduplicateCustomers(freshData) : deduplicateCustomers([...prev, ...freshData]));
+            setHasMore(freshData.length >= 20);
+          }
+        })
+        .catch(() => {
+          // Silent fail - use cached data
+        })
+        .finally(() => {
+          setIsSyncing(false);
+          setLoadingMore(false);
+          isLoadingRef.current = false;
+        });
+
       setPage(pageNum);
     } catch (error) {
       console.error('[Customers] Load error:', error);
+      isLoadingRef.current = false;
     } finally {
       setIsLoading(false);
-      setIsSyncing(false);
       setRefreshing(false);
-      setLoadingMore(false);
     }
   }
 
   function applyFilters() {
     let result = [...customers];
 
+    // Text search filter
     if (filters.search && filters.search.trim()) {
       const query = filters.search.toLowerCase().trim();
       result = result.filter(c => {
@@ -89,11 +142,26 @@ export default function CustomersScreen() {
       });
     }
 
+    // Date filters
     if (filters.startDate) {
       result = result.filter(c => c.date_registered && new Date(c.date_registered) >= filters.startDate);
     }
     if (filters.endDate) {
       result = result.filter(c => c.date_registered && new Date(c.date_registered) <= filters.endDate);
+    }
+
+    // Activity status filter
+    if (activeStatusFilter !== 'all') {
+      result = result.filter(c => c.activity_status === activeStatusFilter);
+    }
+
+    // Debt/Credit filter
+    if (debtFilter === 'with_debt') {
+      result = result.filter(c => (c.credit_balance || 0) < 0);
+    } else if (debtFilter === 'with_credit') {
+      result = result.filter(c => (c.credit_balance || 0) > 0);
+    } else if (debtFilter === 'no_debt') {
+      result = result.filter(c => (c.credit_balance || 0) >= 0);
     }
 
     setFilteredCustomers(result);
@@ -105,9 +173,24 @@ export default function CustomersScreen() {
   }, [filters]);
 
   const loadMore = () => {
-    if (!loadingMore && hasMore && !filters.search) {
-      loadCustomers(page + 1);
+    // Don't load more if:
+    // - Already loading or hasn't initially loaded
+    // - No more data
+    // - Any filter is active (client-side filtering, not pagination)
+    // - Filtered results are empty
+    if (
+      isLoadingRef.current ||
+      !hasInitiallyLoaded.current ||
+      loadingMore ||
+      !hasMore ||
+      filters.search ||
+      activeStatusFilter !== 'all' ||
+      debtFilter !== 'all' ||
+      filteredCustomers.length === 0
+    ) {
+      return;
     }
+    loadCustomers(page + 1);
   };
 
   // Activity status colors matching the web app
@@ -152,10 +235,14 @@ export default function CustomersScreen() {
   const renderCustomer = ({ item }) => {
     const activityStatus = getActivityStatus(item);
     const statusColor = activityStatus ? STATUS_COLORS[activityStatus] : null;
+    const creditBalance = item.credit_balance || 0;
+    const hasDebt = creditBalance < 0;
+    const hasCredit = creditBalance > 0;
+    const displayAmount = Math.abs(creditBalance);
 
     return (
       <TouchableOpacity
-        style={styles.customerCard}
+        style={[styles.customerCard, hasDebt && styles.debtCard, hasCredit && styles.creditCard]}
         onPress={() => router.push(`/customer/${item.id}`)}
         activeOpacity={0.7}
       >
@@ -168,6 +255,16 @@ export default function CustomersScreen() {
             {activityStatus && statusColor && (
               <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                 <Text style={styles.statusBadgeText}>{activityStatus}</Text>
+              </View>
+            )}
+            {hasDebt && (
+              <View style={styles.debtBadge}>
+                <Text style={styles.debtBadgeText}>Owes KES {displayAmount.toLocaleString()}</Text>
+              </View>
+            )}
+            {hasCredit && (
+              <View style={styles.creditBadge}>
+                <Text style={styles.creditBadgeText}>Credit KES {displayAmount.toLocaleString()}</Text>
               </View>
             )}
           </View>
@@ -217,16 +314,63 @@ export default function CustomersScreen() {
         showDateFilter={false}
       />
 
+      {/* Filter Chips */}
+      <View style={styles.filterChipsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
+          {/* Debt/Credit Filters */}
+          <TouchableOpacity
+            style={[styles.filterChip, debtFilter === 'all' && styles.filterChipActive]}
+            onPress={() => setDebtFilter('all')}
+          >
+            <Text style={[styles.filterChipText, debtFilter === 'all' && styles.filterChipTextActive]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, debtFilter === 'with_debt' && styles.filterChipDebt]}
+            onPress={() => setDebtFilter('with_debt')}
+          >
+            <Ionicons name="alert-circle" size={14} color={debtFilter === 'with_debt' ? '#fff' : Colors.error} />
+            <Text style={[styles.filterChipText, debtFilter === 'with_debt' && styles.filterChipTextActive]}>With Debt</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, debtFilter === 'with_credit' && styles.filterChipSuccess]}
+            onPress={() => setDebtFilter('with_credit')}
+          >
+            <Ionicons name="wallet" size={14} color={debtFilter === 'with_credit' ? '#fff' : Colors.success} />
+            <Text style={[styles.filterChipText, debtFilter === 'with_credit' && styles.filterChipTextActive]}>Has Credit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, debtFilter === 'no_debt' && styles.filterChipActive]}
+            onPress={() => setDebtFilter('no_debt')}
+          >
+            <Ionicons name="checkmark-circle" size={14} color={debtFilter === 'no_debt' ? '#fff' : Colors.textSecondary} />
+            <Text style={[styles.filterChipText, debtFilter === 'no_debt' && styles.filterChipTextActive]}>No Debt</Text>
+          </TouchableOpacity>
+
+          <View style={styles.chipDivider} />
+
+          {/* Status Filters */}
+          {['Very Active', 'Active', 'Irregular', 'Inactive', 'New'].map(status => (
+            <TouchableOpacity
+              key={status}
+              style={[styles.filterChip, activeStatusFilter === status && { backgroundColor: STATUS_COLORS[status] }]}
+              onPress={() => setActiveStatusFilter(activeStatusFilter === status ? 'all' : status)}
+            >
+              <Text style={[styles.filterChipText, activeStatusFilter === status && styles.filterChipTextActive]}>{status}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <View style={styles.countBar}>
         <Text style={styles.countText}>{filteredCustomers.length} customers</Text>
       </View>
 
       <FlatList
         data={filteredCustomers}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={(item, index) => item?.id ? `customer-${item.id}` : `index-${index}`}
         renderItem={renderCustomer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        onEndReached={loadMore}
+        onEndReached={customers.length > 0 ? loadMore : undefined}
         onEndReachedThreshold={0.3}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
@@ -249,16 +393,34 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 28, fontWeight: 'bold', color: Colors.textOnPrimary },
+
+  // Filter chips
+  filterChipsContainer: { backgroundColor: Colors.surface, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  filterChipsRow: { paddingHorizontal: 12, gap: 8 },
+  filterChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, gap: 4 },
+  filterChipActive: { backgroundColor: Colors.primary },
+  filterChipDebt: { backgroundColor: Colors.error },
+  filterChipSuccess: { backgroundColor: Colors.success },
+  filterChipText: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
+  filterChipTextActive: { color: '#fff' },
+  chipDivider: { width: 1, height: 20, backgroundColor: Colors.border, marginHorizontal: 4 },
+
   countBar: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
   countText: { fontSize: 13, color: Colors.textSecondary },
   customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, padding: 16, marginHorizontal: 16, marginTop: 10, borderRadius: 12 },
+  debtCard: { borderWidth: 1, borderColor: Colors.error + '60' },
   avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
   customerInfo: { flex: 1, marginLeft: 14 },
-  customerNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  customerNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 },
   customerName: { fontSize: 16, fontWeight: '600', color: Colors.text },
-  statusBadge: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   statusBadgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
+  debtBadge: { backgroundColor: Colors.error, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  debtBadgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
+  creditCard: { borderWidth: 1, borderColor: Colors.success + '60' },
+  creditBadge: { backgroundColor: Colors.success, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  creditBadgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   customerPhone: { fontSize: 14, color: Colors.primary, marginTop: 2 },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4, flexWrap: 'wrap' },
   customerAddress: { fontSize: 12, color: Colors.textLight },

@@ -84,6 +84,41 @@ class CacheService {
         return customers.find(c => c.id === customerId || c.id === parseInt(customerId));
     }
 
+    /**
+     * Update a customer's credit balance in cache (optimistic update)
+     * Used after a refill uses credit to immediately reflect the reduced balance
+     * @param {number|string} customerId - Customer ID
+     * @param {number} creditUsed - Amount of credit used (positive number)
+     */
+    async updateCustomerCreditBalance(customerId, creditUsed) {
+        try {
+            const customers = await this.getCachedCustomers() || [];
+            const customerIndex = customers.findIndex(
+                c => c.id === customerId || c.id === parseInt(customerId)
+            );
+
+            if (customerIndex !== -1) {
+                const customer = customers[customerIndex];
+                // Reduce credit_balance by the amount used
+                // credit_balance: positive = has credit, negative = owes
+                const currentBalance = customer.credit_balance || 0;
+                customers[customerIndex] = {
+                    ...customer,
+                    credit_balance: currentBalance - creditUsed,
+                    _creditUpdatedAt: Date.now(), // Track when we updated
+                };
+
+                await this.cacheCustomers(customers);
+                console.log(`[CacheService] Updated credit balance for customer ${customerId}: ${currentBalance} -> ${currentBalance - creditUsed}`);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.warn('[CacheService] Failed to update customer credit balance:', error);
+            return false;
+        }
+    }
+
     // ========== PACKAGES ==========
     async cachePackages(packages) {
         await this.setCache(CACHE_KEYS.PACKAGES, packages, config.CACHE_EXPIRY.PACKAGES);

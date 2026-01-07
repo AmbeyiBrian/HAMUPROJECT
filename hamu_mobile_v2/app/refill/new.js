@@ -18,6 +18,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../services/api';
+import { cacheService } from '../../services/CacheService';
 import { useAuth } from '../../services/AuthContext';
 import Colors from '../../constants/Colors';
 
@@ -220,6 +221,26 @@ export default function NewRefillScreen() {
             };
 
             const result = await api.queueRefill(refillData);
+
+            // Optimistic update: Update customer's credit balance in cache
+            if (totals.creditApplied > 0) {
+                // Credit was used - reduce their credit balance
+                await cacheService.updateCustomerCreditBalance(
+                    parseInt(form.customer),
+                    totals.creditApplied
+                );
+                // Also update local state so UI reflects change immediately
+                setCreditBalance(prev => Math.max(0, prev - totals.creditApplied));
+            }
+
+            // If payment mode is CREDIT, customer's balance goes more negative (owes more)
+            if (form.payment_mode === 'CREDIT' && totals.total > 0) {
+                // This increases their debt (reduces credit_balance further)
+                await cacheService.updateCustomerCreditBalance(
+                    parseInt(form.customer),
+                    totals.total  // The amount they now owe
+                );
+            }
 
             Alert.alert(
                 'Success',

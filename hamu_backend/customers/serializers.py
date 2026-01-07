@@ -329,8 +329,12 @@ class CustomerInsightSerializer(serializers.ModelSerializer):
     def get_credit_info(self, obj):
         """
         Calculates customer's credit information including:
-        - total_credit: total amount given as credit
-        - outstanding: current outstanding credit amount
+        - total_credit: total amount given as credit (refills + sales on CREDIT)
+        - total_repaid: total amount repaid (credit_payments)
+        - outstanding: current outstanding credit amount (always >= 0)
+        - credit_balance: repaid - owed (same as export_for_offline)
+          - Positive = customer has credit (overpaid)
+          - Negative = customer owes money (debt)
         - repayment_rate: percentage of credit repaid
         """
         # Calculate total credit given (from sales and refills with CREDIT payment mode)
@@ -341,23 +345,28 @@ class CustomerInsightSerializer(serializers.ModelSerializer):
             credit_refills = obj.refills.filter(payment_mode='CREDIT')
             for refill in credit_refills:
                 if hasattr(refill, 'cost'):
-                    total_credit += refill.cost or 0
+                    total_credit += float(refill.cost or 0)
         
         # Add up credit from sales
         if hasattr(obj, 'sales'):
             credit_sales = obj.sales.filter(payment_mode='CREDIT')
             for sale in credit_sales:
                 if hasattr(sale, 'cost'):
-                    total_credit += sale.cost or 0
+                    total_credit += float(sale.cost or 0)
         
         # Calculate total repayments
         total_repaid = 0
         if hasattr(obj, 'credit_payments'):
             for payment in obj.credit_payments.all():
                 if hasattr(payment, 'money_paid'):
-                    total_repaid += payment.money_paid or 0
+                    total_repaid += float(payment.money_paid or 0)
         
-        # Calculate outstanding amount
+        # Calculate credit_balance (same as export_for_offline)
+        # Positive = customer has credit (overpaid)
+        # Negative = customer owes money (debt)
+        credit_balance = total_repaid - total_credit
+        
+        # Calculate outstanding amount (for display, always >= 0)
         outstanding = max(0, total_credit - total_repaid)
         
         # Calculate repayment rate
@@ -367,7 +376,9 @@ class CustomerInsightSerializer(serializers.ModelSerializer):
         
         return {
             'total_credit': total_credit,
+            'total_repaid': total_repaid,
             'outstanding': outstanding,
+            'credit_balance': credit_balance,  # NEW: matches export_for_offline
             'repayment_rate': repayment_rate
         }
       # Method to get loyalty information
