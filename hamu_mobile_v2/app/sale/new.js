@@ -14,6 +14,7 @@ import {
     ActivityIndicator,
     FlatList,
     Modal,
+    Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,6 +53,8 @@ export default function NewSaleScreen() {
     });
 
     const [selectedPackage, setSelectedPackage] = useState(null);
+    const [creditBalance, setCreditBalance] = useState(0); // Customer's available credit balance
+    const [useCredit, setUseCredit] = useState(true); // Toggle to apply credit balance
 
     useEffect(() => {
         loadInitialData();
@@ -139,13 +142,21 @@ export default function NewSaleScreen() {
             customer: customer.id.toString(),
             customerName: customer.names,
         }));
+        // Set credit balance if available (positive = customer has credit to use)
+        setCreditBalance(customer.credit_balance > 0 ? customer.credit_balance : 0);
         setShowCustomerModal(false);
     }
 
     function calculateTotal() {
-        if (!selectedPackage) return 0;
+        if (!selectedPackage) return { subtotal: 0, creditApplied: 0, total: 0 };
         const quantity = parseInt(form.quantity) || 0;
-        return selectedPackage.price * quantity;
+        const subtotal = selectedPackage.price * quantity;
+
+        // Apply credit balance only if toggle is ON and credit is available
+        const creditApplied = (useCredit && creditBalance > 0) ? Math.min(creditBalance, subtotal) : 0;
+        const total = Math.max(0, subtotal - creditApplied);
+
+        return { subtotal, creditApplied, total };
     }
 
     async function handleSubmit() {
@@ -158,6 +169,8 @@ export default function NewSaleScreen() {
         try {
             const shopId = getShopId();
 
+            const totals = calculateTotal();
+
             const saleData = {
                 customer: form.customer ? parseInt(form.customer) : null,
                 customer_name: form.customerName || 'Walk-in',
@@ -166,7 +179,8 @@ export default function NewSaleScreen() {
                 payment_mode: form.payment_mode,
                 notes: form.notes,
                 shop: shopId,
-                total_amount: calculateTotal(),
+                total_amount: totals.total,  // Final amount after credit applied
+                credit_applied: totals.creditApplied,  // Amount of credit used
             };
 
             const result = await api.queueSale(saleData);
@@ -279,10 +293,52 @@ export default function NewSaleScreen() {
                 ))}
             </View>
 
+            {/* Credit Balance Banner with Toggle */}
+            {creditBalance > 0 && (
+                <View style={styles.creditCard}>
+                    <Ionicons name="wallet" size={20} color={Colors.info} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.creditText}>
+                            💰 Credit Balance: KES {creditBalance.toFixed(0)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: Colors.textSecondary }}>
+                            {useCredit ? 'Will be applied to this order' : 'Not using credit for this order'}
+                        </Text>
+                    </View>
+                    <Switch
+                        value={useCredit}
+                        onValueChange={setUseCredit}
+                        trackColor={{ false: Colors.border, true: Colors.info + '80' }}
+                        thumbColor={useCredit ? Colors.info : Colors.textLight}
+                    />
+                </View>
+            )}
+
             {/* Total */}
             <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>Total Amount</Text>
-                <Text style={styles.totalAmount}>KES {calculateTotal()}</Text>
+                {(() => {
+                    const totals = calculateTotal();
+                    return (
+                        <>
+                            {creditBalance > 0 && totals.creditApplied > 0 && (
+                                <>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <Text style={styles.totalLabel}>Subtotal</Text>
+                                        <Text style={{ fontSize: 14, color: Colors.textSecondary }}>KES {totals.subtotal}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Text style={[styles.totalLabel, { color: Colors.info }]}>Credit Applied</Text>
+                                        <Text style={{ fontSize: 14, color: Colors.info }}>- KES {totals.creditApplied}</Text>
+                                    </View>
+                                </>
+                            )}
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <Text style={styles.totalLabel}>Total Amount</Text>
+                                <Text style={styles.totalAmount}>KES {totals.total}</Text>
+                            </View>
+                        </>
+                    );
+                })()}
             </View>
 
             {/* Notes */}
@@ -410,7 +466,9 @@ const styles = StyleSheet.create({
     paymentButtonActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     paymentButtonText: { fontSize: 14, color: Colors.text, fontWeight: '500' },
     paymentButtonTextActive: { color: Colors.textOnPrimary },
-    totalContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.waterLight, padding: 16, borderRadius: 12, marginTop: 20 },
+    creditCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.info + '15', borderRadius: 12, padding: 14, marginTop: 16, gap: 10 },
+    creditText: { fontSize: 14, color: Colors.info, fontWeight: '600' },
+    totalContainer: { backgroundColor: Colors.waterLight, padding: 16, borderRadius: 12, marginTop: 20 },
     totalLabel: { fontSize: 16, color: Colors.text },
     totalAmount: { fontSize: 24, fontWeight: 'bold', color: Colors.primary },
     submitButton: { backgroundColor: Colors.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24, marginBottom: 40 },

@@ -14,6 +14,7 @@ import {
     ActivityIndicator,
     FlatList,
     Modal,
+    Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,6 +57,7 @@ export default function NewRefillScreen() {
     const [selectedPackage, setSelectedPackage] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [creditBalance, setCreditBalance] = useState(0); // Customer's available credit balance
+    const [useCredit, setUseCredit] = useState(true); // Toggle to apply credit balance
 
     useEffect(() => {
         loadInitialData();
@@ -185,8 +187,8 @@ export default function NewRefillScreen() {
             subtotal = selectedPackage.price * paidQty;
         }
 
-        // Apply credit balance if available
-        const creditApplied = Math.min(creditBalance, subtotal);
+        // Apply credit balance only if toggle is ON and credit is available
+        const creditApplied = (useCredit && creditBalance > 0) ? Math.min(creditBalance, subtotal) : 0;
         const total = Math.max(0, subtotal - creditApplied);
 
         return { subtotal, creditApplied, total };
@@ -345,7 +347,7 @@ export default function NewRefillScreen() {
                     </View>
                 </View>
             )}
-            {/* Credit Balance Banner */}
+            {/* Credit Balance Banner with Toggle */}
             {creditBalance > 0 && (
                 <View style={[styles.loyaltyCard, { backgroundColor: Colors.info + '15' }]}>
                     <Ionicons name="wallet" size={20} color={Colors.info} />
@@ -354,9 +356,15 @@ export default function NewRefillScreen() {
                             💰 Credit Balance: KES {creditBalance.toFixed(0)}
                         </Text>
                         <Text style={{ fontSize: 11, color: Colors.textSecondary }}>
-                            Will be applied to this order
+                            {useCredit ? 'Will be applied to this order' : 'Not using credit for this order'}
                         </Text>
                     </View>
+                    <Switch
+                        value={useCredit}
+                        onValueChange={setUseCredit}
+                        trackColor={{ false: Colors.border, true: Colors.info + '80' }}
+                        thumbColor={useCredit ? Colors.info : Colors.textLight}
+                    />
                 </View>
             )}
 
